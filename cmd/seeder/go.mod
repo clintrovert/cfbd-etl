@@ -6,9 +6,8 @@ require (
 	github.com/clintrovert/cfbd-go v0.0.26
 	github.com/lib/pq v1.10.9
 	golang.org/x/sync v0.19.0
-	google.golang.org/protobuf v1.36.11
 	gorm.io/datatypes v1.2.7
-	gorm.io/driver/postgres v1.5.0
+	gorm.io/driver/postgres v1.5.7
 	gorm.io/gorm v1.30.0
 )
 
@@ -24,5 +23,6 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 	gorm.io/driver/mysql v1.5.6 // indirect
 )

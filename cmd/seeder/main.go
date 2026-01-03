@@ -63,12 +63,25 @@ func main() {
    phase1.Go(seeder.SeedFieldGoalEP)
    phase1.Go(seeder.SeedDraftPositions)
 
-   if err = phase1.Wait(); err != nil {
-      slog.Error("phase 1 seeding tables failed", "err", err)
+   if phase1Err := phase1.Wait(); phase1Err != nil {
+      slog.Error("phase 1 seeding tables failed", "err", phase1Err)
       os.Exit(1)
    }
 
    // =============================== Phase 2 ===============================
+   // phase2, phase2Ctx := errgroup.WithContext(context.Background())
+   // seeder.SetExecutionContext(phase2Ctx)
+   //
+   // // There's technically no point to set up concurrent execution for one
+   // // request but adding it here in case more seeds are added for this phase
+   // // in the future.
+   // phase2.Go(seeder.SeedTeams)
+   //
+   // if phase2Err := phase2.Wait(); phase2Err != nil {
+   //    slog.Error("phase 2 seeding tables failed", "err", phase2Err)
+   //    os.Exit(1)
+   // }
+
    // =============================== Phase 3 ===============================
    // =============================== Phase 4 ===============================
    // =============================== Phase 5 ===============================

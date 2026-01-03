@@ -137,3 +137,19 @@ func (s *Seeder) SeedFieldGoalEP() error {
    slog.Info("field goal EP successfully inserted")
    return nil
 }
+
+func (s *Seeder) SeedTeams() error {
+   teams, err := s.API.GetTeams(s.Context, cfbd.GetTeamsRequest{})
+   if err != nil {
+      slog.Error("failed to get teams", "err", err)
+      return fmt.Errorf("failed to get teams; %w", err)
+   }
+
+   if err = s.DB.InsertTeams(s.Context, teams); err != nil {
+      slog.Error("failed to insert teams", "err", err)
+      return fmt.Errorf("failed to insert teams; %w", err)
+   }
+
+   slog.Info("teams successfully inserted")
+   return nil
+}

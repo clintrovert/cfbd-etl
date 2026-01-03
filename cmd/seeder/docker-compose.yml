@@ -1,5 +1,8 @@
 version: '3.8'
 
+# To get a fresh database on every run, use: docker-compose down -v
+# This removes the postgres_data volume, ensuring a clean database on next startup.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -9,7 +12,7 @@ services:
       POSTGRES_PASSWORD: cfbd
       POSTGRES_DB: cfbd
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -25,11 +28,24 @@ services:
     container_name: cfbd-seeder
     environment:
       DATABASE_DSN: "postgres://cfbd:cfbd@postgres:5432/cfbd?sslmode=disable"
-      CFBD_API_KEY: ${CFBD_API_KEY}
+      CFBD_API_KEY: "{CFBD_API_KEY"
     depends_on:
       postgres:
         condition: service_healthy
     restart: "no"
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: cfbd-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
 
 volumes:
   postgres_data:
