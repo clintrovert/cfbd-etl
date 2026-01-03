@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cfbd-postgres
+    environment:
+      POSTGRES_USER: cfbd
+      POSTGRES_PASSWORD: cfbd
+      POSTGRES_DB: cfbd
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cfbd"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  seeder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cfbd-seeder
+    environment:
+      DATABASE_DSN: "postgres://cfbd:cfbd@postgres:5432/cfbd?sslmode=disable"
+      CFBD_API_KEY: ${CFBD_API_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  postgres_data:
+

@@ -1,6 +1,7 @@
 package db
 
 import (
+   "context"
    "errors"
    "fmt"
    "log/slog"
@@ -8,9 +9,6 @@ import (
    "time"
 
    "github.com/clintrovert/cfbd-go/cfbd"
-   "google.golang.org/protobuf/types/known/structpb"
-   "google.golang.org/protobuf/types/known/wrapperspb"
-   "gorm.io/datatypes"
    "gorm.io/driver/postgres"
    "gorm.io/gorm"
    "gorm.io/gorm/clause"
@@ -59,6 +57,10 @@ func NewDatabase(conf Config) (*Database, error) {
    return &Database{gdb}, nil
 }
 
+// Initialize creates the cfbd schema (if needed) and migrates all tables
+// defined in the models/model.go I generated (package models).
+//
+// NOTE: Adjust the import path for your models package accordingly.
 func (db *Database) Initialize() error {
    // Ensure schema exists
    if err := db.Exec(`CREATE SCHEMA IF NOT EXISTS cfbd;`).Error; err != nil {
@@ -66,275 +68,240 @@ func (db *Database) Initialize() error {
       return fmt.Errorf("could not create schema; %w", err)
    }
 
-   // Core
+   // ---- MIGRATION ORDER MATTERS (FKs / dependencies) ----
+   // 1) Reference/dim tables first
    if err := db.AutoMigrate(
-      &Venue{},
-      &Conference{},
-      &Team{},
+      Venue{},
+      Conference{},
+      Team{},
    ); err != nil {
-      slog.Error("could not auto-migrate core tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate core tables; %w", err)
+      slog.Error("could not auto-migrate reference tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate reference tables; %w", err)
    }
 
-   // Simple metrics / lookups
+   // 2) Core spine
    if err := db.AutoMigrate(
-      &AdjustedTeamMetrics{},
-      &PlayerWeightedEPA{},
-      &KickerPAAR{},
-      &TeamATS{},
-      &RosterPlayer{},
-      &TeamTalent{},
-      &PlayerStat{},
-      &TeamStat{},
+      Game{},
    ); err != nil {
-      slog.Error("could not auto-migrate metrics tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate metrics tables; %w", err)
+      slog.Error("could not auto-migrate games table", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate games table; %w", err)
    }
 
-   // Matchups
+   // 3) Matchups
    if err := db.AutoMigrate(
-      &Matchup{},
-      &MatchupGame{},
+      Matchup{},
+      MatchupGame{},
    ); err != nil {
       slog.Error("could not auto-migrate matchup tables", "err", err.Error())
       return fmt.Errorf("could not auto-migrate matchup tables; %w", err)
    }
 
-   // SP / SRS / Elo / FPI
+   // 4) Calendar / scoreboard / records
    if err := db.AutoMigrate(
-      &TeamSP{},
-      &ConferenceSP{},
-      &TeamSRS{},
-      &TeamElo{},
-      &TeamFPI{},
+      CalendarWeek{},
+      Scoreboard{},
+      TeamRecords{},
    ); err != nil {
-      slog.Error("could not auto-migrate ratings tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate ratings tables; %w", err)
+      slog.Error("could not auto-migrate calendar/scoreboard/records tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate calendar/scoreboard/records tables; %w", err)
    }
 
-   // Polls
+   // 5) Plays / drives + lookup tables
    if err := db.AutoMigrate(
-      &PollWeek{},
-      &Poll{},
-      &PollRank{},
+      PlayType{},
+      PlayStatType{},
+      Drive{},
+      Play{},
+      PlayStat{},
    ); err != nil {
-      slog.Error("could not auto-migrate poll tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate poll tables; %w", err)
+      slog.Error("could not auto-migrate play/drive tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate play/drive tables; %w", err)
    }
 
-   // Plays & stats
+   // 6) Game box score stats (nested)
    if err := db.AutoMigrate(
-      &PlayType{},
-      &PlayStatType{},
-      &Play{},
-      &PlayStat{},
-      &PlayerSearchResult{},
-      &PlayerUsage{},
-   ); err != nil {
-      slog.Error("could not auto-migrate play tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate play tables; %w", err)
-   }
+      GameTeamStats{},
+      GameTeamStatsTeam{},
+      GameTeamStatsTeamStat{},
 
-   // Returning production & transfers
-   if err := db.AutoMigrate(
-      &ReturningProduction{},
-      &PlayerTransfer{},
-   ); err != nil {
-      slog.Error("could not auto-migrate returning production tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate returning production tables; %w", err)
-   }
-
-   // Predicted points & PPA added
-   if err := db.AutoMigrate(
-      &PredictedPointsValue{},
-      &TeamSeasonPredictedPointsAdded{},
-      &TeamGamePredictedPointsAdded{},
-      &PlayerGamePredictedPointsAdded{},
-      &PlayerSeasonPredictedPointsAdded{},
-   ); err != nil {
-      slog.Error("could not auto-migrate predicted points tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate predicted points tables; %w", err)
-   }
-
-   // Win probability
-   if err := db.AutoMigrate(
-      &PlayWinProbability{},
-      &PregameWinProbability{},
-      &FieldGoalEP{},
-   ); err != nil {
-      slog.Error("could not auto-migrate win probability tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate win probability tables; %w", err)
-   }
-
-   // Live game
-   if err := db.AutoMigrate(
-      &LiveGame{},
-      &LiveGameTeam{},
-      &LiveGameDrive{},
-      &LiveGamePlay{},
-   ); err != nil {
-      slog.Error("could not auto-migrate live game tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate live game tables; %w", err)
-   }
-
-   // Betting
-   if err := db.AutoMigrate(
-      &BettingGame{},
-      &GameLine{},
-      &UserInfo{},
-   ); err != nil {
-      slog.Error("could not auto-migrate betting tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate betting tables; %w", err)
-   }
-
-   // Games (main)
-   if err := db.AutoMigrate(&Game{}); err != nil {
-      slog.Error("could not auto-migrate games table", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate games table; %w", err)
-   }
-
-   // Game team & player stats
-   if err := db.AutoMigrate(
-      &GameTeamStats{},
-      &GameTeamStatsTeam{},
-      &GameTeamStatsTeamStat{},
-      &GamePlayerStats{},
+      GamePlayerStats{},
+      GamePlayerStatsTeam{},
+      GamePlayerStatCategories{},
+      GamePlayerStatTypes{},
+      GamePlayerStatPlayer{},
    ); err != nil {
       slog.Error("could not auto-migrate game stats tables", "err", err.Error())
       return fmt.Errorf("could not auto-migrate game stats tables; %w", err)
    }
 
-   // Media & weather
+   // 7) Live game (nested)
    if err := db.AutoMigrate(
-      &GameMedia{},
-      &GameWeather{},
+      LiveGame{},
+      LiveGameTeam{},
+      LiveGameDrive{},
+      LiveGamePlay{},
+   ); err != nil {
+      slog.Error("could not auto-migrate live game tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate live game tables; %w", err)
+   }
+
+   // 8) Media & weather
+   if err := db.AutoMigrate(
+      GameMedia{},
+      GameWeather{},
    ); err != nil {
       slog.Error("could not auto-migrate media/weather tables", "err", err.Error())
       return fmt.Errorf("could not auto-migrate media/weather tables; %w", err)
    }
 
-   // Records / calendar / scoreboard
+   // 9) Win probability
    if err := db.AutoMigrate(
-      &TeamRecords{},
-      &CalendarWeek{},
-      &Scoreboard{},
+      PlayWinProbability{},
+      PregameWinProbability{},
+      FieldGoalEP{},
    ); err != nil {
-      slog.Error("could not auto-migrate records/calendar/scoreboard tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate records/calendar/scoreboard tables; %w", err)
+      slog.Error("could not auto-migrate win probability tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate win probability tables; %w", err)
    }
 
-   // Drives
-   if err := db.AutoMigrate(&Drive{}); err != nil {
-      slog.Error("could not auto-migrate drives table", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate drives table; %w", err)
-   }
-
-   // Draft
-   if err := db.AutoMigrate(&DraftPick{}); err != nil {
-      slog.Error("could not auto-migrate draft picks table", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate draft picks table; %w", err)
-   }
-
-   // Coaches
+   // 10) PPA / predicted points
    if err := db.AutoMigrate(
-      &Coach{},
-      &CoachSeason{},
+      PredictedPointsValue{},
+      TeamSeasonPredictedPointsAdded{},
+      TeamGamePredictedPointsAdded{},
+      PlayerGamePredictedPointsAdded{},
+      PlayerSeasonPredictedPointsAdded{},
    ); err != nil {
-      slog.Error("could not auto-migrate coach tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate coach tables; %w", err)
+      slog.Error("could not auto-migrate PPA tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate PPA tables; %w", err)
    }
 
-   // Recruiting
+   // 11) Advanced box score payload table (jsonb)
    if err := db.AutoMigrate(
-      &Recruit{},
-      &TeamRecruitingRanking{},
-      &AggregatedTeamRecruiting{},
-   ); err != nil {
-      slog.Error("could not auto-migrate recruiting tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate recruiting tables; %w", err)
-   }
-
-   // Game havoc
-   if err := db.AutoMigrate(&GameHavocStats{}); err != nil {
-      slog.Error("could not auto-migrate game havoc stats table", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate game havoc stats table; %w", err)
-   }
-
-   // Advanced season stats (normalized)
-   if err := db.AutoMigrate(
-      &AdvRateMetrics{},
-      &AdvHavoc{},
-      &AdvFieldPosition{},
-      &AdvSeasonStatSide{},
-      &AdvancedSeasonStatsNormalized{},
-   ); err != nil {
-      slog.Error("could not auto-migrate advanced season stats tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate advanced season stats tables; %w", err)
-   }
-
-   // Advanced game stats (normalized)
-   if err := db.AutoMigrate(
-      &AdvGamePlayMetrics{},
-      &AdvGameDownMetrics{},
-      &AdvGameStatSide{},
-      &AdvancedGameStatsNormalized{},
-   ); err != nil {
-      slog.Error("could not auto-migrate advanced game stats tables", "err", err.Error())
-      return fmt.Errorf("could not auto-migrate advanced game stats tables; %w", err)
-   }
-
-   // Advanced box score (normalized)
-   if err := db.AutoMigrate(
-      &AdvancedBoxScoreGameInfo{},
-      &AdvancedBoxScore{},
-      &StatsByQuarter{},
-      &AbsTeamFieldPosition{},
-      &AbsTeamScoringOpportunities{},
-      &AbsTeamHavoc{},
-      &AbsTeamRushingStats{},
-      &AbsTeamExplosiveness{},
-      &AbsTeamSuccessRates{},
-      &AbsTeamPPA{},
-      &PlayerStatsByQuarter{},
-      &AbsPlayerPPA{},
-      &PlayerGameUsageQuarters{},
-      &AbsPlayerGameUsage{},
+      AdvancedBoxScore{},
    ); err != nil {
       slog.Error("could not auto-migrate advanced box score tables", "err", err.Error())
       return fmt.Errorf("could not auto-migrate advanced box score tables; %w", err)
    }
 
-   // Constraints GORM doesn't create reliably: CHECK(kind IN ...)
-   if err := db.Exec(`
-		DO $$
-		BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM pg_constraint WHERE conname = 'abs_team_ppa_kind_check'
-			) THEN
-				ALTER TABLE cfbd.abs_team_ppa
-				ADD CONSTRAINT abs_team_ppa_kind_check
-				CHECK (kind IN ('ppa','cumulative_ppa'));
-			END IF;
-		END $$;
-	`).Error; err != nil {
-      slog.Error("could not create abs_team_ppa kind check constraint", "err", err.Error())
-      return fmt.Errorf("could not create abs_team_ppa kind check constraint; %w", err)
+   // 12) Players / roster / usage / transfers / search
+   if err := db.AutoMigrate(
+      RosterPlayer{},
+      PlayerSearchResult{},
+      PlayerUsageSplits{},
+      PlayerUsage{},
+      ReturningProduction{},
+      PlayerTransfer{},
+      PlayerStat{},
+      TeamStat{},
+   ); err != nil {
+      slog.Error("could not auto-migrate player tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate player tables; %w", err)
+   }
+
+   // 13) Recruiting
+   if err := db.AutoMigrate(
+      RecruitHometownInfo{},
+      Recruit{},
+      TeamRecruitingRanking{},
+      AggregatedTeamRecruiting{},
+   ); err != nil {
+      slog.Error("could not auto-migrate recruiting tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate recruiting tables; %w", err)
+   }
+
+   // 14) Ratings
+   if err := db.AutoMigrate(
+      TeamSP{},
+      ConferenceSP{},
+      TeamSRS{},
+      TeamElo{},
+      TeamFPI{},
+   ); err != nil {
+      slog.Error("could not auto-migrate ratings tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate ratings tables; %w", err)
+   }
+
+   // 15) Polls / rankings
+   if err := db.AutoMigrate(
+      PollWeek{},
+      Poll{},
+      PollRank{},
+   ); err != nil {
+      slog.Error("could not auto-migrate poll tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate poll tables; %w", err)
+   }
+
+   // 16) Betting / lines
+   if err := db.AutoMigrate(
+      BettingGame{},
+      GameLine{},
+   ); err != nil {
+      slog.Error("could not auto-migrate betting tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate betting tables; %w", err)
+   }
+
+   // 17) Draft
+   if err := db.AutoMigrate(
+      DraftTeam{},
+      DraftPosition{},
+      DraftPickHometownInfo{},
+      DraftPick{},
+   ); err != nil {
+      slog.Error("could not auto-migrate draft tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate draft tables; %w", err)
+   }
+
+   // 18) Coaches
+   if err := db.AutoMigrate(
+      Coach{},
+      CoachSeason{},
+   ); err != nil {
+      slog.Error("could not auto-migrate coach tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate coach tables; %w", err)
+   }
+
+   // 19) WEPA / metrics
+   if err := db.AutoMigrate(
+      AdjustedTeamMetrics{},
+      PlayerWeightedEPA{},
+      KickerPAAR{},
+      TeamATS{},
+      TeamTalent{},
+      GameHavocStatSide{},
+      GameHavocStats{},
+      AdvancedRateMetrics{},
+      AdvancedHavoc{},
+      AdvancedFieldPosition{},
+      AdvancedSeasonStatSide{},
+      AdvancedSeasonStat{},
+      AdvancedGameStatSide{},
+      AdvancedGameStat{},
+   ); err != nil {
+      slog.Error("could not auto-migrate metrics tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate metrics tables; %w", err)
+   }
+
+   // 20) Misc
+   if err := db.AutoMigrate(
+      UserInfo{},
+      Int32List{},
+   ); err != nil {
+      slog.Error("could not auto-migrate misc tables", "err", err.Error())
+      return fmt.Errorf("could not auto-migrate misc tables; %w", err)
    }
 
    return nil
 }
 
 // IsInitialized returns true if the DB appears initialized.
-// This checks for a reliable sentinel: presence of the cfbd schema AND
-// one "late" table that only exists after a full run (abs_player_game_usage),
-// plus the CHECK constraint we add manually.
 func (db *Database) IsInitialized() (bool, error) {
-   type row struct {
+   type existsRow struct {
       Exists bool
    }
 
    // 1) schema exists?
-   var schema row
+   var schema existsRow
    if err := db.Raw(`
 		SELECT EXISTS (
 			SELECT 1
@@ -349,69 +316,90 @@ func (db *Database) IsInitialized() (bool, error) {
       return false, nil
    }
 
-   // 2) does a "late" table exist? (created near the end of Initialize)
-   // Pick a table that only appears after most migrations ran.
-   var table row
-   if err := db.Raw(`
-		SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.tables
-			WHERE table_schema = 'cfbd'
-			  AND table_name = 'abs_player_game_usage'
-		) AS exists;
-	`).Scan(&table).Error; err != nil {
-      slog.Error("could not check if initialization table exists", "err", err.Error())
-      return false, fmt.Errorf("could not check if initialization table exists; %w", err)
-   }
-   if !table.Exists {
-      return false, nil
+   // 2) sentinel tables exist?
+   // Pick tables that are created across the Initialize() phases so we can
+   // detect partial/failed initialization.
+   requiredTables := []string{
+      // reference/dims
+      "venues",
+      "conferences",
+      "teams",
+
+      // spine
+      "games",
+
+      // plays/drives
+      "drives",
+      "plays",
+      "play_types",
+      "play_stat_types",
+      "play_stats",
+
+      // nested game stats
+      "game_team_stats",
+      "game_player_stats",
+
+      // other groups
+      "recruits",
+      "team_sp",
+      "poll_weeks",
+      "betting_games",
+      "draft_picks",
+      "coaches",
+
+      // “late” misc
+      "int32_lists",
    }
 
-   // 3) does the CHECK constraint exist? (we add it manually at the end)
-   var constraint row
+   var foundCount int64
    if err := db.Raw(`
-		SELECT EXISTS (
-			SELECT 1
-			FROM pg_constraint
-			WHERE conname = 'abs_team_ppa_kind_check'
-		) AS exists;
-	`).Scan(&constraint).Error; err != nil {
-      slog.Error("could not check if check constraint exists", "err", err.Error())
-      return false, fmt.Errorf("could not check if check constraint exists; %w", err)
+		SELECT COUNT(*)
+		FROM information_schema.tables
+		WHERE table_schema = 'cfbd'
+		  AND table_name IN ?;
+	`, requiredTables).Scan(&foundCount).Error; err != nil {
+      slog.Error("could not check for sentinel tables", "err", err.Error())
+      return false, fmt.Errorf("could not check for sentinel tables; %w", err)
    }
-   if !constraint.Exists {
+
+   if foundCount != int64(len(requiredTables)) {
       return false, nil
    }
 
    return true, nil
 }
 
-func (db *Database) UpsertConferences(conferences []*cfbd.Conference) error {
+func (db *Database) InsertConferences(ctx context.Context, conferences []*cfbd.Conference) error {
    if len(conferences) == 0 {
       return nil
    }
 
    models := make([]Conference, 0, len(conferences))
-
    for _, c := range conferences {
       if c == nil {
          continue
       }
+      id := c.GetId()
+      if id == 0 {
+         continue
+      }
 
       models = append(models, Conference{
-         ID:             int(c.GetId()),
-         Name:           c.GetName(),
-         ShortName:      stringPtr(c.GetShortName()),
-         Abbreviation:   stringPtr(c.GetAbbreviation()),
-         Classification: stringPtr(c.GetClassification()),
+         ID:             int32(id),
+         Name:           strings.TrimSpace(c.GetName()),
+         ShortName:      strings.TrimSpace(c.GetShortName()),
+         Abbreviation:   strings.TrimSpace(c.GetAbbreviation()),
+         Classification: strings.TrimSpace(c.GetClassification()),
       })
    }
 
-   if err := db.
+   if len(models) == 0 {
+      return nil
+   }
+
+   if err := db.WithContext(ctx).
       Clauses(clause.OnConflict{
-         Columns: []clause.Column{
-            {Name: "id"},
-         },
+         Columns: []clause.Column{{Name: "id"}},
          DoUpdates: clause.AssignmentColumns([]string{
             "name",
             "short_name",
@@ -427,76 +415,80 @@ func (db *Database) UpsertConferences(conferences []*cfbd.Conference) error {
    return nil
 }
 
-// UpsertTeams upserts Team rows into cfbd.teams.
-// It also upserts the nested Venue (Team.location) into cfbd.venues when present,
-// and sets team.venue_id accordingly.
-func (db *Database) UpsertTeams(teams []*cfbd.Team) error {
-   if len(teams) == 0 {
+func (db *Database) InsertVenues(ctx context.Context, venues []*cfbd.Venue) error {
+   if len(venues) == 0 {
       return nil
    }
 
-   // 1) Upsert venues first (dedupe by venue id)
-   venuesByID := make(map[int]Venue)
-
-   for _, t := range teams {
-      if t == nil || t.GetLocation() == nil {
+   models := make([]Venue, 0, len(venues))
+   for _, v := range venues {
+      if v == nil {
          continue
       }
-      v := t.GetLocation()
-      if v.GetId() == nil {
-         continue // no id => cannot upsert into venues PK
+
+      // Venue ID is NOT optional per your note.
+      id := v.GetId()
+      if id == 0 {
+         continue
       }
 
-      id := int(v.GetId().GetValue())
-      venuesByID[id] = Venue{
-         ID:          id,
-         Name:        stringPtr(v.GetName()),
-         City:        stringPtr(v.GetCity()),
-         State:       stringPtr(v.GetState()),
-         Zip:         stringPtr(v.GetZip()),
-         CountryCode: stringPtr(v.GetCountryCode()),
-         Timezone:    stringPtr(v.GetTimezone()),
-         Latitude: func() *float64 {
-            if v.GetLatitude() == nil {
-               return nil
-            }
-            x := v.GetLatitude().GetValue()
-            return &x
-         }(),
-         Longitude: func() *float64 {
-            if v.GetLongitude() == nil {
-               return nil
-            }
-            x := v.GetLongitude().GetValue()
-            return &x
-         }(),
-         Elevation:        stringPtr(v.GetElevation()),
-         Capacity:         intPtr(v.GetCapacity()),
-         ConstructionYear: intPtr(v.GetConstructionYear()),
-         Grass: func() *bool {
-            if v.GetGrass() == nil {
-               return nil
-            }
-            x := v.GetGrass().GetValue()
-            return &x
-         }(),
-         Dome: func() *bool {
-            if v.GetDome() == nil {
-               return nil
-            }
-            x := v.GetDome().GetValue()
-            return &x
-         }(),
+      // For proto3 optional scalars, the generated struct contains pointer fields
+      // (e.g. v.Latitude != nil). We avoid relying on getters for presence.
+      var lat *float64
+      if v.Latitude != nil {
+         x := *v.Latitude
+         lat = &x
       }
+      var lon *float64
+      if v.Longitude != nil {
+         x := *v.Longitude
+         lon = &x
+      }
+      var cap *int32
+      if v.Capacity != nil {
+         x := *v.Capacity
+         cap = &x
+      }
+      var cy *int32
+      if v.ConstructionYear != nil {
+         x := *v.ConstructionYear
+         cy = &x
+      }
+      var grass *bool
+      if v.Grass != nil {
+         x := *v.Grass
+         grass = &x
+      }
+      var dome *bool
+      if v.Dome != nil {
+         x := *v.Dome
+         dome = &x
+      }
+
+      models = append(models, Venue{
+         ID:               int32(id),
+         Name:             strings.TrimSpace(v.GetName()),
+         City:             strings.TrimSpace(v.GetCity()),
+         State:            strings.TrimSpace(v.GetState()),
+         Zip:              strings.TrimSpace(v.GetZip()),
+         CountryCode:      strings.TrimSpace(v.GetCountryCode()),
+         Timezone:         strings.TrimSpace(v.GetTimezone()),
+         Latitude:         lat,
+         Longitude:        lon,
+         Elevation:        strings.TrimSpace(v.GetElevation()),
+         Capacity:         cap,
+         ConstructionYear: cy,
+         Grass:            grass,
+         Dome:             dome,
+      })
    }
 
-   if len(venuesByID) > 0 {
-      venueModels := make([]Venue, 0, len(venuesByID))
-      for _, v := range venuesByID {
-         venueModels = append(venueModels, v)
-      }
+   if len(models) == 0 {
+      return nil
+   }
 
-      if err := db.Clauses(clause.OnConflict{
+   if err := db.WithContext(ctx).
+      Clauses(clause.OnConflict{
          Columns: []clause.Column{{Name: "id"}},
          DoUpdates: clause.AssignmentColumns([]string{
             "name",
@@ -513,133 +505,8 @@ func (db *Database) UpsertTeams(teams []*cfbd.Team) error {
             "grass",
             "dome",
          }),
-      }).CreateInBatches(venueModels, 500).Error; err != nil {
-         slog.Error("could not upsert venues", "err", err.Error())
-         return fmt.Errorf("could not upsert venues; %w", err)
-      }
-   }
-
-   // 2) Build team models
-   teamModels := make([]Team, 0, len(teams))
-
-   for _, t := range teams {
-      if t == nil {
-         continue
-      }
-
-      altNames, err := listValueJSON(t.GetAlternateNames())
-      if err != nil {
-         slog.Error("could not marshal team alternate_names", "err", err.Error())
-         return fmt.Errorf("could not marshal team alternate_names; %w", err)
-      }
-
-      logos, err := listValueJSON(t.GetLogos())
-      if err != nil {
-         slog.Error("could not marshal team logos", "err", err.Error())
-         return fmt.Errorf("could not marshal team logos; %w", err)
-      }
-
-      var venueID *int
-      if t.GetLocation() != nil && t.GetLocation().GetId() != nil {
-         id := int(t.GetLocation().GetId().GetValue())
-         venueID = &id
-      }
-
-      teamModels = append(teamModels, Team{
-         ID:             int(t.GetId()),
-         School:         t.GetSchool(),
-         Mascot:         stringPtr(t.GetMascot()),
-         Abbreviation:   stringPtr(t.GetAbbreviation()),
-         AlternateNames: altNames,
-         Conference:     stringPtr(t.GetConference()),
-         Division:       stringPtr(t.GetDivision()),
-         Classification: stringPtr(t.GetClassification()),
-         Color:          stringPtr(t.GetColor()),
-         AlternateColor: stringPtr(t.GetAlternateColor()),
-         Logos:          logos,
-         Twitter:        t.GetTwitter(),
-         VenueID:        venueID,
-      })
-   }
-
-   // 3) Upsert teams
-   if err := db.Clauses(clause.OnConflict{
-      Columns: []clause.Column{{Name: "id"}},
-      DoUpdates: clause.AssignmentColumns([]string{
-         "school",
-         "mascot",
-         "abbreviation",
-         "alternate_names",
-         "conference",
-         "division",
-         "classification",
-         "color",
-         "alternate_color",
-         "logos",
-         "twitter",
-         "venue_id",
-      }),
-   }).CreateInBatches(teamModels, 500).Error; err != nil {
-      slog.Error("could not upsert teams", "err", err.Error())
-      return fmt.Errorf("could not upsert teams; %w", err)
-   }
-
-   return nil
-}
-
-func (db *Database) UpsertVenues(venues []*cfbd.Venue) error {
-   if len(venues) == 0 {
-      return nil
-   }
-
-   models := make([]Venue, 0, len(venues))
-
-   for _, v := range venues {
-      if v == nil || v.GetId() == nil {
-         // cannot upsert without primary key
-         continue
-      }
-
-      models = append(models, Venue{
-         ID:               int(v.GetId().GetValue()),
-         Name:             stringPtr(v.GetName()),
-         City:             stringPtr(v.GetCity()),
-         State:            stringPtr(v.GetState()),
-         Zip:              stringPtr(v.GetZip()),
-         CountryCode:      stringPtr(v.GetCountryCode()),
-         Timezone:         stringPtr(v.GetTimezone()),
-         Latitude:         float64Ptr(v.GetLatitude()),
-         Longitude:        float64Ptr(v.GetLongitude()),
-         Elevation:        stringPtr(v.GetElevation()),
-         Capacity:         intPtr(v.GetCapacity()),
-         ConstructionYear: intPtr(v.GetConstructionYear()),
-         Grass:            boolPtr(v.GetGrass()),
-         Dome:             boolPtr(v.GetDome()),
-      })
-   }
-
-   if len(models) == 0 {
-      return nil
-   }
-
-   if err := db.Clauses(clause.OnConflict{
-      Columns: []clause.Column{{Name: "id"}},
-      DoUpdates: clause.AssignmentColumns([]string{
-         "name",
-         "city",
-         "state",
-         "zip",
-         "country_code",
-         "timezone",
-         "latitude",
-         "longitude",
-         "elevation",
-         "capacity",
-         "construction_year",
-         "grass",
-         "dome",
-      }),
-   }).CreateInBatches(models, 500).Error; err != nil {
+      }).
+      CreateInBatches(models, 500).Error; err != nil {
       slog.Error("could not upsert venues", "err", err.Error())
       return fmt.Errorf("could not upsert venues; %w", err)
    }
@@ -647,158 +514,197 @@ func (db *Database) UpsertVenues(venues []*cfbd.Venue) error {
    return nil
 }
 
-func (db *Database) UpsertCoaches(coaches []*cfbd.Coach) error {
-   if len(coaches) == 0 {
+func (db *Database) InsertPlayTypes(ctx context.Context, playTypes []*cfbd.PlayType) error {
+   if len(playTypes) == 0 {
       return nil
    }
 
-   // Transaction keeps coaches + seasons consistent.
-   if err := db.Transaction(func(tx *gorm.DB) error {
-      for _, c := range coaches {
-         if c == nil {
-            continue
-         }
-         if c.GetHireDate() == nil {
-            // hire_date is NOT NULL in your schema; cannot insert without it
-            continue
-         }
-
-         hireDate := c.GetHireDate().AsTime()
-
-         // 1) Find-or-create Coach using (first_name, last_name, hire_date)
-         var coach Coach
-         err := tx.Where(
-            "first_name = ? AND last_name = ? AND hire_date = ?",
-            c.GetFirstName(),
-            c.GetLastName(),
-            hireDate,
-         ).First(&coach).Error
-
-         if err != nil {
-            if errors.Is(err, gorm.ErrRecordNotFound) {
-               coach = Coach{
-                  FirstName: c.GetFirstName(),
-                  LastName:  c.GetLastName(),
-                  HireDate:  hireDate,
-               }
-               if err := tx.Create(&coach).Error; err != nil {
-                  slog.Error("could not create coach", "err", err.Error())
-                  return fmt.Errorf("could not create coach; %w", err)
-               }
-            } else {
-               slog.Error("could not query coach", "err", err.Error())
-               return fmt.Errorf("could not query coach; %w", err)
-            }
-         }
-
-         // 2) Upsert coach seasons (unique constraint: (coach_id, school, year))
-         if len(c.GetSeasons()) == 0 {
-            continue
-         }
-
-         seasons := make([]CoachSeason, 0, len(c.GetSeasons()))
-         for _, s := range c.GetSeasons() {
-            if s == nil {
-               continue
-            }
-            seasons = append(seasons, CoachSeason{
-               CoachID: coach.CoachID,
-
-               School: s.GetSchool(),
-               Year:   int(s.GetYear()),
-
-               Games:  int(s.GetGames()),
-               Wins:   int(s.GetWins()),
-               Losses: int(s.GetLosses()),
-               Ties:   int(s.GetTies()),
-
-               PreseasonRank:  intPtr(s.GetPreseasonRank()),
-               PostseasonRank: intPtr(s.GetPostseasonRank()),
-
-               SRS:       float64Ptr(s.GetSrs()),
-               SPOverall: float64Ptr(s.GetSpOverall()),
-               SPOffense: float64Ptr(s.GetSpOffense()),
-               SPDefense: float64Ptr(s.GetSpDefense()),
-            })
-         }
-
-         if len(seasons) == 0 {
-            continue
-         }
-
-         if err := tx.Clauses(clause.OnConflict{
-            Columns: []clause.Column{
-               {Name: "coach_id"},
-               {Name: "school"},
-               {Name: "year"},
-            },
-            DoUpdates: clause.AssignmentColumns([]string{
-               "games",
-               "wins",
-               "losses",
-               "ties",
-               "preseason_rank",
-               "postseason_rank",
-               "srs",
-               "sp_overall",
-               "sp_offense",
-               "sp_defense",
-            }),
-         }).CreateInBatches(seasons, 500).Error; err != nil {
-            slog.Error("could not upsert coach seasons", "err", err.Error())
-            return fmt.Errorf("could not upsert coach seasons; %w", err)
-         }
+   models := make([]PlayType, 0, len(playTypes))
+   for _, pt := range playTypes {
+      if pt == nil {
+         continue
       }
+      id := pt.GetId()
+      if id == 0 {
+         continue
+      }
+      models = append(models, PlayType{
+         ID:           int32(id),
+         Text:         strings.TrimSpace(pt.GetText()),
+         Abbreviation: strings.TrimSpace(pt.GetAbbreviation()),
+      })
+   }
 
+   if len(models) == 0 {
       return nil
-   }); err != nil {
-      slog.Error("could not upsert coaches", "err", err.Error())
-      return fmt.Errorf("could not upsert coaches; %w", err)
+   }
+
+   if err := db.WithContext(ctx).
+      Clauses(clause.OnConflict{
+         Columns: []clause.Column{{Name: "id"}},
+         DoUpdates: clause.AssignmentColumns([]string{
+            "text",
+            "abbreviation",
+         }),
+      }).
+      CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not upsert play types", "err", err.Error())
+      return fmt.Errorf("could not upsert play types; %w", err)
    }
 
    return nil
 }
 
-func stringPtr(v *wrapperspb.StringValue) *string {
-   if v == nil {
+func (db *Database) InsertPlayStatTypes(ctx context.Context, names []string) error {
+   // Normalize + dedupe
+   uniq := make(map[string]struct{}, len(names))
+   clean := make([]string, 0, len(names))
+   for _, n := range names {
+      s := strings.TrimSpace(n)
+      if s == "" {
+         continue
+      }
+      if _, ok := uniq[s]; ok {
+         continue
+      }
+      uniq[s] = struct{}{}
+      clean = append(clean, s)
+   }
+   if len(clean) == 0 {
       return nil
    }
-   s := v.GetValue()
-   return &s
+
+   // Assign IDs deterministically in this batch (1..N).
+   // If you already have rows in cfbd.play_stat_types, this will conflict.
+   models := make([]PlayStatType, 0, len(clean))
+   for i, name := range clean {
+      models = append(models, PlayStatType{
+         ID:   int32(i + 1),
+         Name: name,
+      })
+   }
+
+   if err := db.WithContext(ctx).CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not insert play stat types", "err", err.Error())
+      return fmt.Errorf("could not insert play stat types; %w", err)
+   }
+
+   return nil
 }
 
-func intPtr(v *wrapperspb.Int32Value) *int {
-   if v == nil {
+func (db *Database) InsertDraftTeams(ctx context.Context, teams []*cfbd.DraftTeam) error {
+   if len(teams) == 0 {
       return nil
    }
-   i := int(v.GetValue())
-   return &i
-}
 
-func boolPtr(v *wrapperspb.BoolValue) *bool {
-   if v == nil {
+   // DraftTeam in your model uses an auto-increment PK; API provides no ID.
+   // We'll insert best-effort and use ON CONFLICT DO NOTHING (no target).
+   models := make([]DraftTeam, 0, len(teams))
+   for _, t := range teams {
+      if t == nil {
+         continue
+      }
+      location := strings.TrimSpace(t.GetLocation())
+      if location == "" {
+         continue
+      }
+      models = append(models, DraftTeam{
+         Location:    location,
+         Nickname:    strings.TrimSpace(t.GetNickname()),
+         DisplayName: strings.TrimSpace(t.GetDisplayName()),
+         Logo:        strings.TrimSpace(t.GetLogo()),
+      })
+   }
+
+   if len(models) == 0 {
       return nil
    }
-   b := v.GetValue()
-   return &b
+
+   if err := db.WithContext(ctx).
+      Clauses(clause.OnConflict{DoNothing: true}).
+      CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not insert draft teams", "err", err.Error())
+      return fmt.Errorf("could not insert draft teams; %w", err)
+   }
+
+   return nil
 }
 
-func float64Ptr(v *wrapperspb.DoubleValue) *float64 {
-   if v == nil {
+func (db *Database) InsertDraftPositions(ctx context.Context, positions []*cfbd.DraftPosition) error {
+   if len(positions) == 0 {
       return nil
    }
-   f := v.GetValue()
-   return &f
+
+   // DraftPosition in your model uses an auto-increment PK; API provides no ID.
+   models := make([]DraftPosition, 0, len(positions))
+   for _, p := range positions {
+      if p == nil {
+         continue
+      }
+      name := strings.TrimSpace(p.GetName())
+      abbr := strings.TrimSpace(p.GetAbbreviation())
+      if name == "" && abbr == "" {
+         continue
+      }
+      models = append(models, DraftPosition{
+         Name:         name,
+         Abbreviation: abbr,
+      })
+   }
+
+   if len(models) == 0 {
+      return nil
+   }
+
+   if err := db.WithContext(ctx).
+      Clauses(clause.OnConflict{DoNothing: true}).
+      CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not insert draft positions", "err", err.Error())
+      return fmt.Errorf("could not insert draft positions; %w", err)
+   }
+
+   return nil
 }
 
-// ListValue -> jsonb
-func listValueJSON(v *structpb.ListValue) (datatypes.JSON, error) {
-   if v == nil {
-      return datatypes.JSON([]byte("null")), nil
+func (db *Database) InsertFieldGoalEP(
+   ctx context.Context,
+   items []*cfbd.FieldGoalEP,
+) error {
+   if len(items) == 0 {
+      return nil
    }
-   b, err := v.MarshalJSON()
-   if err != nil {
-      return nil, err
+
+   models := make([]FieldGoalEP, 0, len(items))
+   for _, it := range items {
+      if it == nil {
+         continue
+      }
+      // Composite PK in model: (yards_to_goal, distance)
+      models = append(models, FieldGoalEP{
+         YardsToGoal:    int32(it.GetYardsToGoal()),
+         Distance:       int32(it.GetDistance()),
+         ExpectedPoints: it.GetExpectedPoints(),
+      })
    }
-   return datatypes.JSON(b), nil
+
+   if len(models) == 0 {
+      return nil
+   }
+
+   if err := db.WithContext(ctx).
+      Clauses(clause.OnConflict{
+         Columns: []clause.Column{
+            {Name: "yards_to_goal"},
+            {Name: "distance"},
+         },
+         DoUpdates: clause.AssignmentColumns([]string{
+            "expected_points",
+         }),
+      }).
+      CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not upsert field goal EP", "err", err.Error())
+      return fmt.Errorf("could not upsert field goal EP; %w", err)
+   }
+
+   return nil
 }

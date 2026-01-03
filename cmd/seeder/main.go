@@ -2,10 +2,10 @@ package main
 
 import (
    "context"
-   "fmt"
    "log/slog"
    "os"
 
+   "github.com/clintrovert/cfbd-etl/seeder/internal"
    "github.com/clintrovert/cfbd-etl/seeder/internal/db"
    "github.com/clintrovert/cfbd-go/cfbd"
    "golang.org/x/sync/errgroup"
@@ -44,90 +44,33 @@ func main() {
       os.Exit(1)
    }
 
-   g, gCtx := errgroup.WithContext(context.Background())
-   g.Go(func() error { return loadConferences(gCtx, api, db) })
-   g.Go(func() error { return loadTeams(gCtx, api, db) })
-   g.Go(func() error { return loadVenues(gCtx, api, db) })
-   g.Go(func() error { return loadCoaches(gCtx, api, db) })
+   seeder := internal.Seeder{API: api, DB: db}
 
-   if err = g.Wait(); err != nil {
-      slog.Error("loading core tables failed", "err", err)
+   // The seeding processes is broken into 6 phases based on dependencies.
+   // Each phase will be concurrently executed and depend on the one before it.
+
+   // =============================== Phase 1 ===============================
+   // Phase 1 consists of tables that do not have foreign key dependencies on
+   // any other table.
+   phase1, phase1Ctx := errgroup.WithContext(context.Background())
+   seeder.SetExecutionContext(phase1Ctx)
+
+   phase1.Go(seeder.SeedVenues)
+   phase1.Go(seeder.SeedPlayTypes)
+   phase1.Go(seeder.SeedStatTypes)
+   phase1.Go(seeder.SeedDraftTeams)
+   phase1.Go(seeder.SeedConferences)
+   phase1.Go(seeder.SeedFieldGoalEP)
+   phase1.Go(seeder.SeedDraftPositions)
+
+   if err = phase1.Wait(); err != nil {
+      slog.Error("phase 1 seeding tables failed", "err", err)
       os.Exit(1)
    }
-}
 
-func loadConferences(
-   ctx context.Context,
-   api *cfbd.Client,
-   db *db.Database) error {
-   conferences, err := api.GetConferences(ctx)
-   if err != nil {
-      slog.Error("failed to get conferences", "err", err)
-      return fmt.Errorf("failed to get conferences; %w", err)
-   }
-
-   if err = db.UpsertConferences(conferences); err != nil {
-      slog.Error("failed to upsert conferences", "err", err)
-      return fmt.Errorf("failed to upset conferences; %w", err)
-   }
-
-   slog.Info("conferences successfully inserted")
-   return nil
-}
-
-func loadVenues(
-   ctx context.Context,
-   api *cfbd.Client,
-   db *db.Database) error {
-   venues, err := api.GetVenues(ctx)
-   if err != nil {
-      slog.Error("failed to get venues", "err", err)
-      return fmt.Errorf("failed to get venues; %w", err)
-   }
-
-   if err = db.UpsertVenues(venues); err != nil {
-      slog.Error("failed to upsert venues", "err", err)
-      return fmt.Errorf("failed to upsert venues; %w", err)
-   }
-
-   slog.Info("venues successfully inserted")
-   return nil
-}
-
-func loadTeams(
-   ctx context.Context,
-   api *cfbd.Client,
-   db *db.Database) error {
-   teams, err := api.GetTeams(ctx, cfbd.GetTeamsRequest{})
-   if err != nil {
-      slog.Error("failed to get teams", "err", err)
-      return fmt.Errorf("failed to get teams; %w", err)
-   }
-
-   if err = db.UpsertTeams(teams); err != nil {
-      slog.Error("failed to upsert teams", "err", err)
-      return fmt.Errorf("failed to upsert teams; %w", err)
-   }
-
-   slog.Info("teams successfully inserted")
-   return nil
-}
-
-func loadCoaches(
-   ctx context.Context,
-   api *cfbd.Client,
-   db *db.Database) error {
-   coaches, err := api.GetCoaches(ctx, cfbd.GetCoachesRequest{})
-   if err != nil {
-      slog.Error("failed to get coaches", "err", err)
-      return fmt.Errorf("failed to get coaches; %w", err)
-   }
-
-   if err = db.UpsertCoaches(coaches); err != nil {
-      slog.Error("failed to upsert coaches", "err", err)
-      return fmt.Errorf("failed to upsert coaches; %w", err)
-   }
-
-   slog.Info("coaches successfully inserted")
-   return nil
+   // =============================== Phase 2 ===============================
+   // =============================== Phase 3 ===============================
+   // =============================== Phase 4 ===============================
+   // =============================== Phase 5 ===============================
+   // =============================== Phase 6 ===============================
 }
