@@ -8,7 +8,9 @@ import (
    "time"
 
    "github.com/clintrovert/cfbd-go/cfbd"
+   "google.golang.org/protobuf/types/known/structpb"
    "google.golang.org/protobuf/types/known/wrapperspb"
+   "gorm.io/datatypes"
    "gorm.io/driver/postgres"
    "gorm.io/gorm"
    "gorm.io/gorm/clause"
@@ -425,10 +427,378 @@ func (db *Database) UpsertConferences(conferences []*cfbd.Conference) error {
    return nil
 }
 
+// UpsertTeams upserts Team rows into cfbd.teams.
+// It also upserts the nested Venue (Team.location) into cfbd.venues when present,
+// and sets team.venue_id accordingly.
+func (db *Database) UpsertTeams(teams []*cfbd.Team) error {
+   if len(teams) == 0 {
+      return nil
+   }
+
+   // 1) Upsert venues first (dedupe by venue id)
+   venuesByID := make(map[int]Venue)
+
+   for _, t := range teams {
+      if t == nil || t.GetLocation() == nil {
+         continue
+      }
+      v := t.GetLocation()
+      if v.GetId() == nil {
+         continue // no id => cannot upsert into venues PK
+      }
+
+      id := int(v.GetId().GetValue())
+      venuesByID[id] = Venue{
+         ID:          id,
+         Name:        stringPtr(v.GetName()),
+         City:        stringPtr(v.GetCity()),
+         State:       stringPtr(v.GetState()),
+         Zip:         stringPtr(v.GetZip()),
+         CountryCode: stringPtr(v.GetCountryCode()),
+         Timezone:    stringPtr(v.GetTimezone()),
+         Latitude: func() *float64 {
+            if v.GetLatitude() == nil {
+               return nil
+            }
+            x := v.GetLatitude().GetValue()
+            return &x
+         }(),
+         Longitude: func() *float64 {
+            if v.GetLongitude() == nil {
+               return nil
+            }
+            x := v.GetLongitude().GetValue()
+            return &x
+         }(),
+         Elevation:        stringPtr(v.GetElevation()),
+         Capacity:         intPtr(v.GetCapacity()),
+         ConstructionYear: intPtr(v.GetConstructionYear()),
+         Grass: func() *bool {
+            if v.GetGrass() == nil {
+               return nil
+            }
+            x := v.GetGrass().GetValue()
+            return &x
+         }(),
+         Dome: func() *bool {
+            if v.GetDome() == nil {
+               return nil
+            }
+            x := v.GetDome().GetValue()
+            return &x
+         }(),
+      }
+   }
+
+   if len(venuesByID) > 0 {
+      venueModels := make([]Venue, 0, len(venuesByID))
+      for _, v := range venuesByID {
+         venueModels = append(venueModels, v)
+      }
+
+      if err := db.Clauses(clause.OnConflict{
+         Columns: []clause.Column{{Name: "id"}},
+         DoUpdates: clause.AssignmentColumns([]string{
+            "name",
+            "city",
+            "state",
+            "zip",
+            "country_code",
+            "timezone",
+            "latitude",
+            "longitude",
+            "elevation",
+            "capacity",
+            "construction_year",
+            "grass",
+            "dome",
+         }),
+      }).CreateInBatches(venueModels, 500).Error; err != nil {
+         slog.Error("could not upsert venues", "err", err.Error())
+         return fmt.Errorf("could not upsert venues; %w", err)
+      }
+   }
+
+   // 2) Build team models
+   teamModels := make([]Team, 0, len(teams))
+
+   for _, t := range teams {
+      if t == nil {
+         continue
+      }
+
+      altNames, err := listValueJSON(t.GetAlternateNames())
+      if err != nil {
+         slog.Error("could not marshal team alternate_names", "err", err.Error())
+         return fmt.Errorf("could not marshal team alternate_names; %w", err)
+      }
+
+      logos, err := listValueJSON(t.GetLogos())
+      if err != nil {
+         slog.Error("could not marshal team logos", "err", err.Error())
+         return fmt.Errorf("could not marshal team logos; %w", err)
+      }
+
+      var venueID *int
+      if t.GetLocation() != nil && t.GetLocation().GetId() != nil {
+         id := int(t.GetLocation().GetId().GetValue())
+         venueID = &id
+      }
+
+      teamModels = append(teamModels, Team{
+         ID:             int(t.GetId()),
+         School:         t.GetSchool(),
+         Mascot:         stringPtr(t.GetMascot()),
+         Abbreviation:   stringPtr(t.GetAbbreviation()),
+         AlternateNames: altNames,
+         Conference:     stringPtr(t.GetConference()),
+         Division:       stringPtr(t.GetDivision()),
+         Classification: stringPtr(t.GetClassification()),
+         Color:          stringPtr(t.GetColor()),
+         AlternateColor: stringPtr(t.GetAlternateColor()),
+         Logos:          logos,
+         Twitter:        t.GetTwitter(),
+         VenueID:        venueID,
+      })
+   }
+
+   // 3) Upsert teams
+   if err := db.Clauses(clause.OnConflict{
+      Columns: []clause.Column{{Name: "id"}},
+      DoUpdates: clause.AssignmentColumns([]string{
+         "school",
+         "mascot",
+         "abbreviation",
+         "alternate_names",
+         "conference",
+         "division",
+         "classification",
+         "color",
+         "alternate_color",
+         "logos",
+         "twitter",
+         "venue_id",
+      }),
+   }).CreateInBatches(teamModels, 500).Error; err != nil {
+      slog.Error("could not upsert teams", "err", err.Error())
+      return fmt.Errorf("could not upsert teams; %w", err)
+   }
+
+   return nil
+}
+
+func (db *Database) UpsertVenues(venues []*cfbd.Venue) error {
+   if len(venues) == 0 {
+      return nil
+   }
+
+   models := make([]Venue, 0, len(venues))
+
+   for _, v := range venues {
+      if v == nil || v.GetId() == nil {
+         // cannot upsert without primary key
+         continue
+      }
+
+      models = append(models, Venue{
+         ID:               int(v.GetId().GetValue()),
+         Name:             stringPtr(v.GetName()),
+         City:             stringPtr(v.GetCity()),
+         State:            stringPtr(v.GetState()),
+         Zip:              stringPtr(v.GetZip()),
+         CountryCode:      stringPtr(v.GetCountryCode()),
+         Timezone:         stringPtr(v.GetTimezone()),
+         Latitude:         float64Ptr(v.GetLatitude()),
+         Longitude:        float64Ptr(v.GetLongitude()),
+         Elevation:        stringPtr(v.GetElevation()),
+         Capacity:         intPtr(v.GetCapacity()),
+         ConstructionYear: intPtr(v.GetConstructionYear()),
+         Grass:            boolPtr(v.GetGrass()),
+         Dome:             boolPtr(v.GetDome()),
+      })
+   }
+
+   if len(models) == 0 {
+      return nil
+   }
+
+   if err := db.Clauses(clause.OnConflict{
+      Columns: []clause.Column{{Name: "id"}},
+      DoUpdates: clause.AssignmentColumns([]string{
+         "name",
+         "city",
+         "state",
+         "zip",
+         "country_code",
+         "timezone",
+         "latitude",
+         "longitude",
+         "elevation",
+         "capacity",
+         "construction_year",
+         "grass",
+         "dome",
+      }),
+   }).CreateInBatches(models, 500).Error; err != nil {
+      slog.Error("could not upsert venues", "err", err.Error())
+      return fmt.Errorf("could not upsert venues; %w", err)
+   }
+
+   return nil
+}
+
+func (db *Database) UpsertCoaches(coaches []*cfbd.Coach) error {
+   if len(coaches) == 0 {
+      return nil
+   }
+
+   // Transaction keeps coaches + seasons consistent.
+   if err := db.Transaction(func(tx *gorm.DB) error {
+      for _, c := range coaches {
+         if c == nil {
+            continue
+         }
+         if c.GetHireDate() == nil {
+            // hire_date is NOT NULL in your schema; cannot insert without it
+            continue
+         }
+
+         hireDate := c.GetHireDate().AsTime()
+
+         // 1) Find-or-create Coach using (first_name, last_name, hire_date)
+         var coach Coach
+         err := tx.Where(
+            "first_name = ? AND last_name = ? AND hire_date = ?",
+            c.GetFirstName(),
+            c.GetLastName(),
+            hireDate,
+         ).First(&coach).Error
+
+         if err != nil {
+            if errors.Is(err, gorm.ErrRecordNotFound) {
+               coach = Coach{
+                  FirstName: c.GetFirstName(),
+                  LastName:  c.GetLastName(),
+                  HireDate:  hireDate,
+               }
+               if err := tx.Create(&coach).Error; err != nil {
+                  slog.Error("could not create coach", "err", err.Error())
+                  return fmt.Errorf("could not create coach; %w", err)
+               }
+            } else {
+               slog.Error("could not query coach", "err", err.Error())
+               return fmt.Errorf("could not query coach; %w", err)
+            }
+         }
+
+         // 2) Upsert coach seasons (unique constraint: (coach_id, school, year))
+         if len(c.GetSeasons()) == 0 {
+            continue
+         }
+
+         seasons := make([]CoachSeason, 0, len(c.GetSeasons()))
+         for _, s := range c.GetSeasons() {
+            if s == nil {
+               continue
+            }
+            seasons = append(seasons, CoachSeason{
+               CoachID: coach.CoachID,
+
+               School: s.GetSchool(),
+               Year:   int(s.GetYear()),
+
+               Games:  int(s.GetGames()),
+               Wins:   int(s.GetWins()),
+               Losses: int(s.GetLosses()),
+               Ties:   int(s.GetTies()),
+
+               PreseasonRank:  intPtr(s.GetPreseasonRank()),
+               PostseasonRank: intPtr(s.GetPostseasonRank()),
+
+               SRS:       float64Ptr(s.GetSrs()),
+               SPOverall: float64Ptr(s.GetSpOverall()),
+               SPOffense: float64Ptr(s.GetSpOffense()),
+               SPDefense: float64Ptr(s.GetSpDefense()),
+            })
+         }
+
+         if len(seasons) == 0 {
+            continue
+         }
+
+         if err := tx.Clauses(clause.OnConflict{
+            Columns: []clause.Column{
+               {Name: "coach_id"},
+               {Name: "school"},
+               {Name: "year"},
+            },
+            DoUpdates: clause.AssignmentColumns([]string{
+               "games",
+               "wins",
+               "losses",
+               "ties",
+               "preseason_rank",
+               "postseason_rank",
+               "srs",
+               "sp_overall",
+               "sp_offense",
+               "sp_defense",
+            }),
+         }).CreateInBatches(seasons, 500).Error; err != nil {
+            slog.Error("could not upsert coach seasons", "err", err.Error())
+            return fmt.Errorf("could not upsert coach seasons; %w", err)
+         }
+      }
+
+      return nil
+   }); err != nil {
+      slog.Error("could not upsert coaches", "err", err.Error())
+      return fmt.Errorf("could not upsert coaches; %w", err)
+   }
+
+   return nil
+}
+
 func stringPtr(v *wrapperspb.StringValue) *string {
    if v == nil {
       return nil
    }
    s := v.GetValue()
    return &s
+}
+
+func intPtr(v *wrapperspb.Int32Value) *int {
+   if v == nil {
+      return nil
+   }
+   i := int(v.GetValue())
+   return &i
+}
+
+func boolPtr(v *wrapperspb.BoolValue) *bool {
+   if v == nil {
+      return nil
+   }
+   b := v.GetValue()
+   return &b
+}
+
+func float64Ptr(v *wrapperspb.DoubleValue) *float64 {
+   if v == nil {
+      return nil
+   }
+   f := v.GetValue()
+   return &f
+}
+
+// ListValue -> jsonb
+func listValueJSON(v *structpb.ListValue) (datatypes.JSON, error) {
+   if v == nil {
+      return datatypes.JSON([]byte("null")), nil
+   }
+   b, err := v.MarshalJSON()
+   if err != nil {
+      return nil, err
+   }
+   return datatypes.JSON(b), nil
 }
