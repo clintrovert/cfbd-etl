@@ -28,7 +28,9 @@ func NewSeeder(db *db.Database, api *cfbd.Client) (*Seeder, error) {
 // SetExecutionContext allows the seeder's context to be mutable. This is
 // technically an antipattern and the context should be passed to the individual
 // seed functions, but errgroup's Go() function wants an empty function
-// signature and doing this makes the code in main a lot more concise.
+// signature and doing this makes the code in main.go a lot more concise.
+//
+// This function must be called prior to any of the Seed-ing functions below.
 func (s *Seeder) SetExecutionContext(ctx context.Context) {
    s.ctx = ctx
 }
