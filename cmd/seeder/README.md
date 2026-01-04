@@ -1,4 +1,4 @@
-# CFBD ETL Seeder
+# CFBD DB Seeder
 
 A Go service that seeds a PostgreSQL database with data from the College Football Data (CFBD) API. The seeder performs automatic schema migration and populates tables in phases to handle foreign key dependencies correctly.
 

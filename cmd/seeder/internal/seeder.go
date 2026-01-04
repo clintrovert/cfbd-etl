@@ -10,10 +10,12 @@ import (
    "github.com/clintrovert/cfbd-go/cfbd"
 )
 
-var supportedYears = []int32{
-   2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016,
-   2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
-}
+// var supportedYears = []int32{
+//    2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016,
+//    2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+// }
+
+var supportedYears = []int32{2024, 2025}
 
 type Seeder struct {
    db  *db.Database
@@ -223,20 +225,93 @@ func (s *Seeder) SeedGames() error {
 }
 
 func (s *Seeder) SeedDrives() error {
-   var all []*cfbd.Drive
+   totalInserted := 0
 
    for _, year := range supportedYears {
       drives, err := s.api.GetDrives(s.ctx, cfbd.GetDrivesRequest{Year: year})
       if err != nil {
-
+         slog.Error(
+            "failed to get drives",
+            "year", int32ToString(year),
+            "err", err,
+         )
+         return fmt.Errorf("failed to get drives for year %d; %w", year, err)
       }
 
-      all = append(all, drives...)
+      if len(drives) > 0 {
+         if err := s.db.InsertDrives(s.ctx, drives); err != nil {
+            slog.Error("failed to insert drives", "err", err)
+            return fmt.Errorf("failed to insert drives; %w", err)
+         }
+         totalInserted += len(drives)
+         slog.Info("inserted drives for year",
+            "year", int32ToString(year),
+            "count", len(drives),
+            "total", totalInserted,
+         )
+      }
    }
+
+   slog.Info("all drives successfully inserted", "total_count", totalInserted)
    return nil
 }
 
 func (s *Seeder) SeedPlays() error {
+   totalInserted := 0
+
+   for _, year := range supportedYears {
+      // GetPlays requires both a year and a week to be specified.
+      // We must query GetCalendar first to get the available weeks
+      // for each year.
+      calendarWeeks, err := s.api.GetCalendar(
+         s.ctx, cfbd.GetCalendarRequest{Year: year},
+      )
+      if err != nil {
+         slog.Error(
+            "failed to get calendar for plays",
+            "year", int32ToString(year),
+            "err", err,
+         )
+         return fmt.Errorf("failed to get calendar for year %d; %w", year, err)
+      }
+
+      for _, week := range calendarWeeks {
+         plays, err := s.api.GetPlays(s.ctx, cfbd.GetPlaysRequest{
+            Year:       year,
+            Week:       week.GetWeek(),
+            SeasonType: week.GetSeasonType(),
+         })
+         if err != nil {
+            slog.Error(
+               "failed to get plays",
+               "year", int32ToString(year),
+               "week", int32ToString(week.GetWeek()),
+               "season_type", week.GetSeasonType(),
+               "err", err,
+            )
+            return fmt.Errorf("failed to get plays for year %d, week %d, season_type %s; %w",
+               year, week.GetWeek(), week.GetSeasonType(), err)
+         }
+
+         if len(plays) > 0 {
+            if err := s.db.InsertPlays(s.ctx, plays); err != nil {
+               slog.Error("failed to insert plays", "err", err)
+               return fmt.Errorf("failed to insert plays; %w", err)
+            }
+
+            totalInserted += len(plays)
+            slog.Info("inserted plays",
+               "year", int32ToString(year),
+               "week", int32ToString(week.GetWeek()),
+               "season_type", week.GetSeasonType(),
+               "count", len(plays),
+               "total", totalInserted,
+            )
+         }
+      }
+   }
+
+   slog.Info("plays successfully inserted", "total_count", totalInserted)
    return nil
 }
 
