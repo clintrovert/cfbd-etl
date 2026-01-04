@@ -28,7 +28,7 @@ services:
     container_name: cfbd-seeder
     environment:
       DATABASE_DSN: "postgres://cfbd:cfbd@postgres:5432/cfbd?sslmode=disable"
-      CFBD_API_KEY: "{CFBD_API_KEY"
+      CFBD_API_KEY: "{CFBD_API_KEY}"
     depends_on:
       postgres:
         condition: service_healthy

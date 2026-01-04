@@ -4,10 +4,16 @@ import (
    "context"
    "fmt"
    "log/slog"
+   "strconv"
 
    "github.com/clintrovert/cfbd-etl/seeder/internal/db"
    "github.com/clintrovert/cfbd-go/cfbd"
 )
+
+var supportedYears = []int32{
+   2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016,
+   2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+}
 
 type Seeder struct {
    DB      *db.Database
@@ -152,4 +158,164 @@ func (s *Seeder) SeedTeams() error {
 
    slog.Info("teams successfully inserted")
    return nil
+}
+
+func (s *Seeder) SeedCalendar() error {
+   var all []*cfbd.CalendarWeek
+   for _, year := range supportedYears {
+      weeks, err := s.API.GetCalendar(
+         s.Context, cfbd.GetCalendarRequest{Year: year},
+      )
+      if err != nil {
+         slog.Error(
+            "failed to get calendar",
+            "year", int32ToString(year),
+            "err", err,
+         )
+         return fmt.Errorf("failed to get calendar for year %d; %w", year, err)
+      }
+
+      all = append(all, weeks...)
+   }
+
+   if err := s.DB.InsertCalendarWeeks(s.Context, all); err != nil {
+      slog.Error("failed to insert calendar", "err", err)
+      return fmt.Errorf("failed to insert calendar; %w", err)
+   }
+
+   return nil
+}
+
+func (s *Seeder) SeedGames() error {
+   var all []*cfbd.Game
+   for _, year := range supportedYears {
+      weeks, err := s.API.GetGames(
+         s.Context, cfbd.GetGamesRequest{Year: year},
+      )
+      if err != nil {
+         slog.Error(
+            "failed to get games",
+            "year", int32ToString(year),
+            "err", err,
+         )
+         return fmt.Errorf("failed to get games for year %d; %w", year, err)
+      }
+
+      all = append(all, weeks...)
+   }
+
+   if err := s.DB.InsertGames(s.Context, all); err != nil {
+      slog.Error("failed to insert games", "err", err)
+      return fmt.Errorf("failed to insert games; %w", err)
+   }
+
+   return nil
+}
+
+func (s *Seeder) SeedDrives() error {
+   return nil
+}
+
+func (s *Seeder) SeedPlays() error {
+   return nil
+}
+
+func (s *Seeder) SeedPlayStats() error {
+   return nil
+}
+
+func (s *Seeder) SeedGameTeamStats() error {
+   return nil
+}
+
+func (s *Seeder) SeedGamePlayerStats() error {
+   return nil
+}
+
+func (s *Seeder) SeedWinProbability() error {
+   return nil
+}
+
+func (s *Seeder) SeedAdvancedBoxScore() error {
+   return nil
+}
+
+func (s *Seeder) SeedGameWeather() error {
+   return nil
+}
+
+func (s *Seeder) SeedGameMedia() error {
+   return nil
+}
+
+func (s *Seeder) SeedBettingLines() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamRecords() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamTalentComposite() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamATS() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamSPPlus() error {
+   return nil
+}
+
+func (s *Seeder) SeedConferenceSPPlus() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamSRSRankings() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamEloRankings() error {
+   return nil
+}
+
+func (s *Seeder) SeedTeamFPIRankings() error {
+   return nil
+}
+
+func (s *Seeder) SeedWepaTeamSeason() error {
+   return nil
+}
+
+func (s *Seeder) SeedWepaPassing() error {
+   return nil
+}
+
+func (s *Seeder) SeedWepaRushing() error {
+   return nil
+}
+
+func (s *Seeder) SeedWepaKicking() error {
+   return nil
+}
+
+func (s *Seeder) SeedReturningProduction() error {
+   return nil
+}
+
+func (s *Seeder) SeedPortalPlayers() error {
+   return nil
+}
+
+func (s *Seeder) SeedSeasonPlayerStats() error {
+   return nil
+}
+
+func (s *Seeder) SeedSeasonTeamStats() error {
+   return nil
+}
+
+func int32ToString(val int32) string {
+   return strconv.FormatInt(int64(val), 10)
 }

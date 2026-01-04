@@ -46,22 +46,22 @@ func main() {
 
    seeder := internal.Seeder{API: api, DB: db}
 
-   // The seeding processes is broken into 6 phases based on dependencies.
+   ctx := context.Background()
+
+   // The seeding processes is split into multiple phases based on dependencies.
    // Each phase will be concurrently executed and depend on the one before it.
 
    // =============================== Phase 1 ===============================
-   // Phase 1 consists of tables that do not have foreign key dependencies on
-   // any other table.
-   phase1, phase1Ctx := errgroup.WithContext(context.Background())
+   phase1, phase1Ctx := errgroup.WithContext(ctx)
    seeder.SetExecutionContext(phase1Ctx)
 
-   phase1.Go(seeder.SeedVenues)
-   phase1.Go(seeder.SeedPlayTypes)
-   phase1.Go(seeder.SeedStatTypes)
-   phase1.Go(seeder.SeedDraftTeams)
-   phase1.Go(seeder.SeedConferences)
-   phase1.Go(seeder.SeedFieldGoalEP)
-   phase1.Go(seeder.SeedDraftPositions)
+   phase1.Go(seeder.SeedVenues)         // 1 request
+   phase1.Go(seeder.SeedPlayTypes)      // 1 request
+   phase1.Go(seeder.SeedStatTypes)      // 1 request
+   phase1.Go(seeder.SeedDraftTeams)     // 1 request
+   phase1.Go(seeder.SeedConferences)    // 1 request
+   phase1.Go(seeder.SeedFieldGoalEP)    // 1 request
+   phase1.Go(seeder.SeedDraftPositions) // 1 request
 
    if phase1Err := phase1.Wait(); phase1Err != nil {
       slog.Error("phase 1 seeding tables failed", "err", phase1Err)
@@ -69,21 +69,75 @@ func main() {
    }
 
    // =============================== Phase 2 ===============================
-   // phase2, phase2Ctx := errgroup.WithContext(context.Background())
-   // seeder.SetExecutionContext(phase2Ctx)
-   //
-   // // There's technically no point to set up concurrent execution for one
-   // // request but adding it here in case more seeds are added for this phase
-   // // in the future.
-   // phase2.Go(seeder.SeedTeams)
-   //
-   // if phase2Err := phase2.Wait(); phase2Err != nil {
-   //    slog.Error("phase 2 seeding tables failed", "err", phase2Err)
-   //    os.Exit(1)
-   // }
+   phase2, phase2Ctx := errgroup.WithContext(ctx)
+   seeder.SetExecutionContext(phase2Ctx)
+
+   // There's technically no point to set up concurrent execution for one
+   // request but adding it here in case more seeds are added for this phase
+   // in the future.
+   phase2.Go(seeder.SeedTeams) // 1 request
+
+   if phase2Err := phase2.Wait(); phase2Err != nil {
+      slog.Error("phase 2 seeding tables failed", "err", phase2Err)
+      os.Exit(1)
+   }
 
    // =============================== Phase 3 ===============================
+   phase3, phase3Ctx := errgroup.WithContext(ctx)
+   seeder.SetExecutionContext(phase3Ctx)
+
+   phase3.Go(seeder.SeedCalendar) // ~20 requests
+   phase3.Go(seeder.SeedGames)    // ~20 requests
+
+   if phase3Err := phase3.Wait(); phase3Err != nil {
+      slog.Error("phase 3 seeding tables failed", "err", phase3Err)
+      os.Exit(1)
+   }
+
    // =============================== Phase 4 ===============================
+   phase4, phase4Ctx := errgroup.WithContext(ctx)
+   seeder.SetExecutionContext(phase4Ctx)
+
+   phase4.Go(seeder.SeedDrives)
+   phase4.Go(seeder.SeedPlays)
+   phase4.Go(seeder.SeedPlayStats)
+   phase4.Go(seeder.SeedGameTeamStats)
+   phase4.Go(seeder.SeedGamePlayerStats)
+   phase4.Go(seeder.SeedWinProbability)
+   phase4.Go(seeder.SeedAdvancedBoxScore)
+   phase4.Go(seeder.SeedGameWeather)
+   phase4.Go(seeder.SeedGameMedia)
+   phase4.Go(seeder.SeedBettingLines)
+
+   if phase4Err := phase4.Wait(); phase4Err != nil {
+      slog.Error("phase 4 seeding tables failed", "err", phase4Err)
+      os.Exit(1)
+   }
+
    // =============================== Phase 5 ===============================
+   phase5, phase5Ctx := errgroup.WithContext(ctx)
+   seeder.SetExecutionContext(phase5Ctx)
+
+   phase5.Go(seeder.SeedTeamRecords)
+   phase5.Go(seeder.SeedTeamTalentComposite)
+   phase5.Go(seeder.SeedTeamATS)
+   phase5.Go(seeder.SeedTeamSPPlus)
+   phase5.Go(seeder.SeedConferenceSPPlus)
+   phase5.Go(seeder.SeedTeamSRSRankings)
+   phase5.Go(seeder.SeedTeamEloRankings)
+   phase5.Go(seeder.SeedTeamFPIRankings)
+   phase5.Go(seeder.SeedWepaTeamSeason)
+   phase5.Go(seeder.SeedWepaPassing)
+   phase5.Go(seeder.SeedWepaRushing)
+   phase5.Go(seeder.SeedWepaKicking)
+   phase5.Go(seeder.SeedReturningProduction)
+   phase5.Go(seeder.SeedPortalPlayers)
+   phase5.Go(seeder.SeedSeasonPlayerStats)
+   phase5.Go(seeder.SeedSeasonTeamStats)
+
+   if phase5Err := phase5.Wait(); phase5Err != nil {
+      slog.Error("phase 5 seeding tables failed", "err", phase5Err)
+      os.Exit(1)
+   }
    // =============================== Phase 6 ===============================
 }
