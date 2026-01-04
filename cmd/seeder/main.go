@@ -19,20 +19,20 @@ func main() {
       MaxConnectionLifetimeMin: 30,
    }
 
-   db, err := db.NewDatabase(conf)
+   database, err := db.NewDatabase(conf)
    if err != nil {
       slog.Error("failed to create database connection", "err", err)
       os.Exit(1)
    }
 
-   isInitialized, err := db.IsInitialized()
+   isInitialized, err := database.IsInitialized()
    if err != nil {
       slog.Error("failed to verify initialized status", "err", err)
       os.Exit(1)
    }
 
    if !isInitialized {
-      if err = db.Initialize(); err != nil {
+      if err = database.Initialize(); err != nil {
          slog.Error("failed to initialize database", "err", err)
          os.Exit(1)
       }
@@ -44,7 +44,11 @@ func main() {
       os.Exit(1)
    }
 
-   seeder := internal.Seeder{API: api, DB: db}
+   seeder, err := internal.NewSeeder(database, api)
+   if err != nil {
+      slog.Error("failed to create seeder", "err", err)
+      os.Exit(1)
+   }
 
    ctx := context.Background()
 
@@ -98,7 +102,7 @@ func main() {
    phase4, phase4Ctx := errgroup.WithContext(ctx)
    seeder.SetExecutionContext(phase4Ctx)
 
-   phase4.Go(seeder.SeedDrives)
+   phase4.Go(seeder.SeedDrives) // ~20 requests (takes a while though)
    phase4.Go(seeder.SeedPlays)
    phase4.Go(seeder.SeedPlayStats)
    phase4.Go(seeder.SeedGameTeamStats)
@@ -134,10 +138,23 @@ func main() {
    phase5.Go(seeder.SeedPortalPlayers)
    phase5.Go(seeder.SeedSeasonPlayerStats)
    phase5.Go(seeder.SeedSeasonTeamStats)
+   phase5.Go(seeder.SeedRankings)
 
    if phase5Err := phase5.Wait(); phase5Err != nil {
       slog.Error("phase 5 seeding tables failed", "err", phase5Err)
       os.Exit(1)
    }
+
    // =============================== Phase 6 ===============================
+   phase6, phase6Ctx := errgroup.WithContext(ctx)
+   seeder.SetExecutionContext(phase6Ctx)
+
+   phase6.Go(seeder.SeedRecruits)
+   phase6.Go(seeder.SeedRecruitingRankings)
+   phase6.Go(seeder.SeedDraftPicks)
+
+   if phase6Err := phase6.Wait(); phase6Err != nil {
+      slog.Error("phase 6 seeding tables failed", "err", phase6Err)
+      os.Exit(1)
+   }
 }

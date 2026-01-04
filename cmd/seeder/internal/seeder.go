@@ -16,24 +16,32 @@ var supportedYears = []int32{
 }
 
 type Seeder struct {
-   DB      *db.Database
-   API     *cfbd.Client
-   Context context.Context
+   db  *db.Database
+   api *cfbd.Client
+   ctx context.Context
 }
 
+func NewSeeder(db *db.Database, api *cfbd.Client) (*Seeder, error) {
+   return &Seeder{db: db, api: api}, nil
+}
+
+// SetExecutionContext allows the seeder's context to be mutable. This is
+// technically an antipattern and the context should be passed to the individual
+// seed functions, but errgroup's Go() function wants an empty function
+// signature and doing this makes the code in main a lot more concise.
 func (s *Seeder) SetExecutionContext(ctx context.Context) {
-   s.Context = ctx
+   s.ctx = ctx
 }
 
 // SeedPlayTypes todo:describe.
 func (s *Seeder) SeedPlayTypes() error {
-   playTypes, err := s.API.GetPlayTypes(s.Context)
+   playTypes, err := s.api.GetPlayTypes(s.ctx)
    if err != nil {
       slog.Error("failed to get play types", "err", err)
       return fmt.Errorf("failed to get play types; %w", err)
    }
 
-   if err = s.DB.InsertPlayTypes(s.Context, playTypes); err != nil {
+   if err = s.db.InsertPlayTypes(s.ctx, playTypes); err != nil {
       slog.Error("failed to upsert play types", "err", err)
       return fmt.Errorf("failed to upsert play types; %w", err)
    }
@@ -44,13 +52,13 @@ func (s *Seeder) SeedPlayTypes() error {
 
 // SeedConferences todo:describe.
 func (s *Seeder) SeedConferences() error {
-   conferences, err := s.API.GetConferences(s.Context)
+   conferences, err := s.api.GetConferences(s.ctx)
    if err != nil {
       slog.Error("failed to get conferences", "err", err)
       return fmt.Errorf("failed to get conferences; %w", err)
    }
 
-   if err = s.DB.InsertConferences(s.Context, conferences); err != nil {
+   if err = s.db.InsertConferences(s.ctx, conferences); err != nil {
       slog.Error("failed to upsert conferences", "err", err)
       return fmt.Errorf("failed to upset conferences; %w", err)
    }
@@ -61,13 +69,13 @@ func (s *Seeder) SeedConferences() error {
 
 // SeedVenues todo:describe.
 func (s *Seeder) SeedVenues() error {
-   venues, err := s.API.GetVenues(s.Context)
+   venues, err := s.api.GetVenues(s.ctx)
    if err != nil {
       slog.Error("failed to get venues", "err", err)
       return fmt.Errorf("failed to get venues; %w", err)
    }
 
-   if err = s.DB.InsertVenues(s.Context, venues); err != nil {
+   if err = s.db.InsertVenues(s.ctx, venues); err != nil {
       slog.Error("failed to upsert venues", "err", err)
       return fmt.Errorf("failed to upsert venues; %w", err)
    }
@@ -78,13 +86,13 @@ func (s *Seeder) SeedVenues() error {
 
 // SeedStatTypes todo:describe.
 func (s *Seeder) SeedStatTypes() error {
-   statCats, err := s.API.GetStatCategories(s.Context)
+   statCats, err := s.api.GetStatCategories(s.ctx)
    if err != nil {
       slog.Error("failed to get play types", "err", err)
       return fmt.Errorf("failed to get play types; %w", err)
    }
 
-   if err = s.DB.InsertPlayStatTypes(s.Context, statCats); err != nil {
+   if err = s.db.InsertPlayStatTypes(s.ctx, statCats); err != nil {
       slog.Error("failed to upsert play types", "err", err)
       return fmt.Errorf("failed to upsert play types; %w", err)
    }
@@ -95,13 +103,13 @@ func (s *Seeder) SeedStatTypes() error {
 
 // SeedDraftTeams todo:describe.
 func (s *Seeder) SeedDraftTeams() error {
-   teams, err := s.API.GetDraftTeams(s.Context)
+   teams, err := s.api.GetDraftTeams(s.ctx)
    if err != nil {
       slog.Error("failed to get draft teams", "err", err)
       return fmt.Errorf("failed to get draft teams; %w", err)
    }
 
-   if err = s.DB.InsertDraftTeams(s.Context, teams); err != nil {
+   if err = s.db.InsertDraftTeams(s.ctx, teams); err != nil {
       slog.Error("failed to upsert draft teams", "err", err)
       return fmt.Errorf("failed to upsert draft teams; %w", err)
    }
@@ -112,13 +120,13 @@ func (s *Seeder) SeedDraftTeams() error {
 
 // SeedDraftPositions todo:describe.
 func (s *Seeder) SeedDraftPositions() error {
-   positions, err := s.API.GetDraftPositions(s.Context)
+   positions, err := s.api.GetDraftPositions(s.ctx)
    if err != nil {
       slog.Error("failed to get draft positions", "err", err)
       return fmt.Errorf("failed to get draft positions; %w", err)
    }
 
-   if err = s.DB.InsertDraftPositions(s.Context, positions); err != nil {
+   if err = s.db.InsertDraftPositions(s.ctx, positions); err != nil {
       slog.Error("failed to upsert draft teams", "err", err)
       return fmt.Errorf("failed to upsert draft teams; %w", err)
    }
@@ -129,13 +137,13 @@ func (s *Seeder) SeedDraftPositions() error {
 
 // SeedFieldGoalEP todo:describe.
 func (s *Seeder) SeedFieldGoalEP() error {
-   eps, err := s.API.GetFieldGoalExpectedPoints(s.Context)
+   eps, err := s.api.GetFieldGoalExpectedPoints(s.ctx)
    if err != nil {
       slog.Error("failed to get field goal ep", "err", err)
       return fmt.Errorf("failed to get field goal ep; %w", err)
    }
 
-   if err = s.DB.InsertFieldGoalEP(s.Context, eps); err != nil {
+   if err = s.db.InsertFieldGoalEP(s.ctx, eps); err != nil {
       slog.Error("failed to insert field goal ep", "err", err)
       return fmt.Errorf("failed to insert field goal ep; %w", err)
    }
@@ -145,13 +153,13 @@ func (s *Seeder) SeedFieldGoalEP() error {
 }
 
 func (s *Seeder) SeedTeams() error {
-   teams, err := s.API.GetTeams(s.Context, cfbd.GetTeamsRequest{})
+   teams, err := s.api.GetTeams(s.ctx, cfbd.GetTeamsRequest{})
    if err != nil {
       slog.Error("failed to get teams", "err", err)
       return fmt.Errorf("failed to get teams; %w", err)
    }
 
-   if err = s.DB.InsertTeams(s.Context, teams); err != nil {
+   if err = s.db.InsertTeams(s.ctx, teams); err != nil {
       slog.Error("failed to insert teams", "err", err)
       return fmt.Errorf("failed to insert teams; %w", err)
    }
@@ -163,8 +171,8 @@ func (s *Seeder) SeedTeams() error {
 func (s *Seeder) SeedCalendar() error {
    var all []*cfbd.CalendarWeek
    for _, year := range supportedYears {
-      weeks, err := s.API.GetCalendar(
-         s.Context, cfbd.GetCalendarRequest{Year: year},
+      weeks, err := s.api.GetCalendar(
+         s.ctx, cfbd.GetCalendarRequest{Year: year},
       )
       if err != nil {
          slog.Error(
@@ -178,7 +186,7 @@ func (s *Seeder) SeedCalendar() error {
       all = append(all, weeks...)
    }
 
-   if err := s.DB.InsertCalendarWeeks(s.Context, all); err != nil {
+   if err := s.db.InsertCalendarWeeks(s.ctx, all); err != nil {
       slog.Error("failed to insert calendar", "err", err)
       return fmt.Errorf("failed to insert calendar; %w", err)
    }
@@ -189,8 +197,8 @@ func (s *Seeder) SeedCalendar() error {
 func (s *Seeder) SeedGames() error {
    var all []*cfbd.Game
    for _, year := range supportedYears {
-      weeks, err := s.API.GetGames(
-         s.Context, cfbd.GetGamesRequest{Year: year},
+      weeks, err := s.api.GetGames(
+         s.ctx, cfbd.GetGamesRequest{Year: year},
       )
       if err != nil {
          slog.Error(
@@ -204,7 +212,7 @@ func (s *Seeder) SeedGames() error {
       all = append(all, weeks...)
    }
 
-   if err := s.DB.InsertGames(s.Context, all); err != nil {
+   if err := s.db.InsertGames(s.ctx, all); err != nil {
       slog.Error("failed to insert games", "err", err)
       return fmt.Errorf("failed to insert games; %w", err)
    }
@@ -213,6 +221,16 @@ func (s *Seeder) SeedGames() error {
 }
 
 func (s *Seeder) SeedDrives() error {
+   var all []*cfbd.Drive
+
+   for _, year := range supportedYears {
+      drives, err := s.api.GetDrives(s.ctx, cfbd.GetDrivesRequest{Year: year})
+      if err != nil {
+
+      }
+
+      all = append(all, drives...)
+   }
    return nil
 }
 
@@ -313,6 +331,22 @@ func (s *Seeder) SeedSeasonPlayerStats() error {
 }
 
 func (s *Seeder) SeedSeasonTeamStats() error {
+   return nil
+}
+
+func (s *Seeder) SeedRankings() error {
+   return nil
+}
+
+func (s *Seeder) SeedRecruits() error {
+   return nil
+}
+
+func (s *Seeder) SeedRecruitingRankings() error {
+   return nil
+}
+
+func (s *Seeder) SeedDraftPicks() error {
    return nil
 }
 
