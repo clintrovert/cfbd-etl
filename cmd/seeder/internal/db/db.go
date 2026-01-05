@@ -21,6 +21,18 @@ import (
 // ErrDsnMissing todo:describe.
 var ErrDsnMissing = errors.New("dsn is required")
 
+const (
+	// DefaultBatchSize is the default batch size for database operations.
+	DefaultBatchSize = 20
+	// LargeBatchSize is used for less complex database operations.
+	LargeBatchSize = 50
+	// RateLimiterBurst is the burst size for rate limiting.
+	RateLimiterBurst = 20
+	// DefaultMaxOpenConnections is the default maximum number of open
+	// database connections.
+	DefaultMaxOpenConnections = 20
+)
+
 // Config todo:describe
 type Config struct {
 	DSN                      string
@@ -617,6 +629,7 @@ func (db *Database) InsertPlayStatTypes(
 	// We assume these stat types will not change with much frequency.
 	models := make([]PlayStatType, 0, len(clean))
 	for i, name := range clean {
+		//nolint:gosec // Array index is always within int32 range
 		models = append(models, PlayStatType{
 			ID:   int32(i + 1),
 			Name: name,
@@ -780,7 +793,7 @@ func (db *Database) InsertTeams(
 			continue
 		}
 
-		id := int32(t.GetId())
+		id := t.GetId()
 		if id == 0 {
 			continue
 		}
@@ -788,7 +801,7 @@ func (db *Database) InsertTeams(
 		var venueID *int32
 		if loc := t.GetLocation(); loc != nil {
 			// venue id is NOT optional (per your note)
-			vid := int32(loc.GetId())
+			vid := loc.GetId()
 			if vid != 0 {
 				venueID = &vid
 			}
@@ -886,12 +899,16 @@ func (db *Database) InsertCalendarWeeks(
 			endDate = &t
 		}
 		var firstGameStart *time.Time
+		//nolint:staticcheck // Deprecated method, no replacement available
 		if w.GetFirstGameStart() != nil {
+			//nolint:staticcheck // Deprecated method, no replacement available
 			t := w.GetFirstGameStart().AsTime()
 			firstGameStart = &t
 		}
 		var lastGameStart *time.Time
+		//nolint:staticcheck // Deprecated method, no replacement available
 		if w.GetLastGameStart() != nil {
+			//nolint:staticcheck // Deprecated method, no replacement available
 			t := w.GetLastGameStart().AsTime()
 			lastGameStart = &t
 		}
@@ -1032,33 +1049,39 @@ func (db *Database) InsertGames(
 		}
 
 		models = append(models, Game{
-			ID:                     id,
-			Season:                 g.GetSeason(),
-			Week:                   g.GetWeek(),
-			SeasonType:             strings.TrimSpace(g.GetSeasonType()),
-			StartDate:              startDate,
-			StartTimeTBD:           g.GetStartTime_TBD(),
-			Completed:              g.GetCompleted(),
-			NeutralSite:            g.GetNeutralSite(),
-			ConferenceGame:         g.GetConferenceGame(),
-			Attendance:             attendance,
-			VenueID:                venueID,
-			Venue:                  strings.TrimSpace(g.GetVenue()),
-			HomeID:                 homeID,
-			HomeTeam:               strings.TrimSpace(g.GetHomeTeam()),
-			HomeConference:         strings.TrimSpace(g.GetHomeConference()),
-			HomeClassification:     strings.TrimSpace(g.GetHomeClassification()),
-			HomePoints:             homePoints,
-			HomeLineScores:         utils.Int32SliceToInt64Array(g.GetHomeLineScores()),
+			ID:                 id,
+			Season:             g.GetSeason(),
+			Week:               g.GetWeek(),
+			SeasonType:         strings.TrimSpace(g.GetSeasonType()),
+			StartDate:          startDate,
+			StartTimeTBD:       g.GetStartTime_TBD(),
+			Completed:          g.GetCompleted(),
+			NeutralSite:        g.GetNeutralSite(),
+			ConferenceGame:     g.GetConferenceGame(),
+			Attendance:         attendance,
+			VenueID:            venueID,
+			Venue:              strings.TrimSpace(g.GetVenue()),
+			HomeID:             homeID,
+			HomeTeam:           strings.TrimSpace(g.GetHomeTeam()),
+			HomeConference:     strings.TrimSpace(g.GetHomeConference()),
+			HomeClassification: strings.TrimSpace(g.GetHomeClassification()),
+			HomePoints:         homePoints,
+			HomeLineScores: utils.Int32SliceToInt64Array(
+				g.GetHomeLineScores(),
+			),
 			HomePostWinProbability: homePostWinProb,
 			HomePregameElo:         homePregameElo,
 			HomePostgameElo:        homePostgameElo,
 			AwayID:                 awayID,
 			AwayTeam:               strings.TrimSpace(g.GetAwayTeam()),
 			AwayConference:         strings.TrimSpace(g.GetAwayConference()),
-			AwayClassification:     strings.TrimSpace(g.GetAwayClassification()),
-			AwayPoints:             awayPoints,
-			AwayLineScores:         utils.Int32SliceToInt64Array(g.GetAwayLineScores()),
+			AwayClassification: strings.TrimSpace(
+				g.GetAwayClassification(),
+			),
+			AwayPoints: awayPoints,
+			AwayLineScores: utils.Int32SliceToInt64Array(
+				g.GetAwayLineScores(),
+			),
 			AwayPostWinProbability: awayPostWinProb,
 			AwayPregameElo:         awayPregameElo,
 			AwayPostgameElo:        awayPostgameElo,
@@ -1620,7 +1643,7 @@ func (db *Database) InsertBettingLines(
 			SeasonType:         l.SeasonType,
 			Week:               l.Week,
 			StartDate:          startDate,
-			HomeTeamID:         l.HomeTeamId, // protobuf field
+			HomeTeamID:         l.HomeTeamId, // protobuf field thing thing thing thin
 			HomeTeam:           l.HomeTeam,
 			HomeConference:     l.HomeConference,
 			HomeClassification: l.HomeClassification,
@@ -1655,7 +1678,7 @@ func (db *Database) InsertTeamRecords(
 		}
 
 		// Helper to safely get total record
-		getRec := func(rec *cfbd.TeamRecord) (games, wins, losses, ties int32) {
+		getRec := func(rec *cfbd.TeamRecord) (int32, int32, int32, int32) {
 			if rec == nil {
 				return 0, 0, 0, 0
 			}
@@ -1985,7 +2008,8 @@ func (db *Database) InsertAdjustedTeamMetrics(
 			rushLine = m.Rushing.LineYards
 		}
 
-		rushAllowHigh, rushAllowOpen, rushAllowSec, rushAllowLine := 0.0, 0.0, 0.0, 0.0
+		rushAllowHigh, rushAllowOpen, rushAllowSec, rushAllowLine :=
+			0.0, 0.0, 0.0, 0.0
 		if m.RushingAllowed != nil {
 			rushAllowHigh = m.RushingAllowed.HighlightYards
 			rushAllowOpen = m.RushingAllowed.OpenFieldYards
@@ -2286,7 +2310,7 @@ func (db *Database) InsertRankings(
 	// Reduced batch size for complex associations
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		UpdateAll: true,
-	}).CreateInBatches(models, 20).Error
+	}).CreateInBatches(models, DefaultBatchSize).Error
 }
 
 // InsertRecruits inserts recruiting data.
@@ -2422,7 +2446,10 @@ func (db *Database) InsertDraftPicks(
 }
 
 // InsertGameTeamStats inserts game team stats.
-func (db *Database) InsertGameTeamStats(ctx context.Context, stats []*cfbd.GameTeamStats) error {
+func (db *Database) InsertGameTeamStats(
+	ctx context.Context,
+	stats []*cfbd.GameTeamStats,
+) error {
 	if len(stats) == 0 {
 		return nil
 	}
@@ -2468,7 +2495,7 @@ func (db *Database) InsertGameTeamStats(ctx context.Context, stats []*cfbd.GameT
 
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		UpdateAll: true,
-	}).CreateInBatches(models, 50).Error
+	}).CreateInBatches(models, LargeBatchSize).Error
 }
 
 // InsertGamePlayerStats inserts game player stats.
@@ -2504,7 +2531,9 @@ func (db *Database) InsertGamePlayerStats(
 						continue
 					}
 
-					athletes := make([]GamePlayerStatPlayer, 0, len(typ.Athletes))
+					athletes := make(
+						[]GamePlayerStatPlayer, 0, len(typ.Athletes),
+					)
 					for _, a := range typ.Athletes {
 						if a == nil {
 							continue
@@ -2545,7 +2574,7 @@ func (db *Database) InsertGamePlayerStats(
 
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		UpdateAll: true,
-	}).CreateInBatches(models, 20).Error // Smaller batch for very deep nesting
+	}).CreateInBatches(models, DefaultBatchSize).Error // Smaller batch
 }
 
 // GetGameIDs returns a slice of game IDs for a given season.

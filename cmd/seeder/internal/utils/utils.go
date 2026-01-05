@@ -1,3 +1,4 @@
+//nolint:revive,lll // Package name is acceptable for utility functions
 package utils
 
 import (
@@ -13,6 +14,7 @@ func YearsFrom2005ToNow() []int32 {
 	years := make([]int32, 0, currentYear-2005+1)
 
 	for y := 2005; y <= currentYear; y++ {
+		//nolint:gosec // Year values are always within int32 range
 		years = append(years, int32(y))
 	}
 

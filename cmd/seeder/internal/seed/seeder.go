@@ -624,7 +624,7 @@ func (s *Seeder) SeedWinProbability() error {
 		}
 
 		if err := group.Wait(); err != nil {
-			return err
+			return fmt.Errorf("error waiting for play win probability seeding: %w", err)
 		}
 	}
 	return nil
@@ -678,13 +678,13 @@ func (s *Seeder) SeedAdvancedBoxScore() error {
 		}
 
 		if err := group.Wait(); err != nil {
-			return err
+			return fmt.Errorf("error waiting for play win probability seeding: %w", err)
 		}
 
 		// Flush remaining
 		if len(batch) > 0 {
 			if err := s.db.InsertAdvancedBoxScores(s.ctx, batch); err != nil {
-				return err
+				return fmt.Errorf("error inserting advanced box scores: %w", err)
 			}
 		}
 	}

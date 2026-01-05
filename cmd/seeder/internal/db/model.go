@@ -10,11 +10,14 @@ import (
 // NOTE:
 // - These are Postgres-oriented GORM v2 models for the CFBD proto messages.
 // - Table names are schema-qualified as cfbd.<table>.
-// - For repeated/nested structures, child tables are used where reasonable; for dynamic/unknown
-//   shapes (google.protobuf.Struct / google.protobuf.Value), jsonb columns are used.
-// - Many “stat blob” style endpoints are also persisted as jsonb to keep schema stable.
+// - For repeated/nested structures, child tables are used where reasonable;
+//   for dynamic/unknown shapes
+//   (google.protobuf.Struct / google.protobuf.Value), jsonb columns are used.
+// - Many "stat blob" style endpoints are also persisted as jsonb to keep
+//   schema stable.
 //
-// You can AutoMigrate these in dependency order (venues, teams, conferences, games, etc.).
+// You can AutoMigrate these in dependency order
+// (venues, teams, conferences, games, etc.).
 
 // ============================================================
 // Shared / helper (embeddable) structs
@@ -136,8 +139,8 @@ type Game struct {
 	HomeConference         string        `gorm:"column:home_conference"`
 	HomeClassification     string        `gorm:"column:home_classification"`
 	HomePoints             *int32        `gorm:"column:home_points"`
-	HomeLineScores         pq.Int64Array `gorm:"column:home_line_scores;type:int[]"`
-	HomePostWinProbability *float64      `gorm:"column:home_postgame_win_probability"`
+	HomeLineScores         pq.Int64Array `gorm:"column:home_line_scores;type:int[]"`   //nolint:lll
+	HomePostWinProbability *float64      `gorm:"column:home_postgame_win_probability"` //nolint:lll
 	HomePregameElo         *int32        `gorm:"column:home_pregame_elo"`
 	HomePostgameElo        *int32        `gorm:"column:home_postgame_elo"`
 
@@ -146,8 +149,8 @@ type Game struct {
 	AwayConference         string        `gorm:"column:away_conference"`
 	AwayClassification     string        `gorm:"column:away_classification"`
 	AwayPoints             *int32        `gorm:"column:away_points"`
-	AwayLineScores         pq.Int64Array `gorm:"column:away_line_scores;type:int[]"`
-	AwayPostWinProbability *float64      `gorm:"column:away_postgame_win_probability"`
+	AwayLineScores         pq.Int64Array `gorm:"column:away_line_scores;type:int[]"`   //nolint:lll
+	AwayPostWinProbability *float64      `gorm:"column:away_postgame_win_probability"` //nolint:lll
 	AwayPregameElo         *int32        `gorm:"column:away_pregame_elo"`
 	AwayPostgameElo        *int32        `gorm:"column:away_postgame_elo"`
 
@@ -616,14 +619,18 @@ type AdvancedFieldPosition struct {
 	AverageStart           *float64 `gorm:"column:average_start"`
 }
 
-func (AdvancedFieldPosition) TableName() string { return "advanced_field_position" }
+func (AdvancedFieldPosition) TableName() string {
+	return "advanced_field_position"
+}
 
 type AdvancedSeasonStatSide struct {
 	ID      int64          `gorm:"primaryKey;column:id"`
 	Payload datatypes.JSON `gorm:"column:payload;type:jsonb"`
 }
 
-func (AdvancedSeasonStatSide) TableName() string { return "advanced_season_stat_sides" }
+func (AdvancedSeasonStatSide) TableName() string {
+	return "advanced_season_stat_sides"
+}
 
 type AdvancedSeasonStat struct {
 	Season     int32  `gorm:"primaryKey;column:season"`
@@ -632,8 +639,8 @@ type AdvancedSeasonStat struct {
 
 	OffenseSideID *int64                  `gorm:"column:offense_side_id;index"`
 	DefenseSideID *int64                  `gorm:"column:defense_side_id;index"`
-	Offense       *AdvancedSeasonStatSide `gorm:"foreignKey:OffenseSideID;references:ID"`
-	Defense       *AdvancedSeasonStatSide `gorm:"foreignKey:DefenseSideID;references:ID"`
+	Offense       *AdvancedSeasonStatSide `gorm:"foreignKey:OffenseSideID;references:ID"` //nolint:lll
+	Defense       *AdvancedSeasonStatSide `gorm:"foreignKey:DefenseSideID;references:ID"` //nolint:lll
 }
 
 func (AdvancedSeasonStat) TableName() string { return "advanced_season_stats" }
@@ -643,7 +650,9 @@ type AdvancedGameStatSide struct {
 	Payload datatypes.JSON `gorm:"column:payload;type:jsonb"`
 }
 
-func (AdvancedGameStatSide) TableName() string { return "advanced_game_stat_sides" }
+func (AdvancedGameStatSide) TableName() string {
+	return "advanced_game_stat_sides"
+}
 
 type AdvancedGameStat struct {
 	GameID     int32  `gorm:"primaryKey;column:game_id"`
@@ -655,8 +664,8 @@ type AdvancedGameStat struct {
 
 	OffenseSideID *int64                `gorm:"column:offense_side_id;index"`
 	DefenseSideID *int64                `gorm:"column:defense_side_id;index"`
-	Offense       *AdvancedGameStatSide `gorm:"foreignKey:OffenseSideID;references:ID"`
-	Defense       *AdvancedGameStatSide `gorm:"foreignKey:DefenseSideID;references:ID"`
+	Offense       *AdvancedGameStatSide `gorm:"foreignKey:OffenseSideID;references:ID"` //nolint:lll
+	Defense       *AdvancedGameStatSide `gorm:"foreignKey:DefenseSideID;references:ID"` //nolint:lll
 }
 
 func (AdvancedGameStat) TableName() string { return "advanced_game_stats" }
@@ -723,8 +732,8 @@ type Recruit struct {
 	StateProvince string   `gorm:"column:state_province"`
 	Country       string   `gorm:"column:country"`
 
-	HometownInfoID *int64               `gorm:"column:hometown_info_id;index"`
-	HometownInfo   *RecruitHometownInfo `gorm:"foreignKey:HometownInfoID;references:ID"`
+	HometownInfoID *int64               `gorm:"column:hometown_info_id;index"`           //nolint:lll
+	HometownInfo   *RecruitHometownInfo `gorm:"foreignKey:HometownInfoID;references:ID"` //nolint:lll
 }
 
 func (Recruit) TableName() string { return "recruits" }
@@ -736,7 +745,9 @@ type TeamRecruitingRanking struct {
 	Points float64 `gorm:"column:points;not null"`
 }
 
-func (TeamRecruitingRanking) TableName() string { return "team_recruiting_rankings" }
+func (TeamRecruitingRanking) TableName() string {
+	return "team_recruiting_rankings"
+}
 
 type AggregatedTeamRecruiting struct {
 	Team          string  `gorm:"primaryKey;column:team"`
@@ -748,11 +759,14 @@ type AggregatedTeamRecruiting struct {
 	AverageStars  float64 `gorm:"column:average_stars;not null"`
 }
 
-func (AggregatedTeamRecruiting) TableName() string { return "aggregated_team_recruiting" }
+func (AggregatedTeamRecruiting) TableName() string {
+	return "aggregated_team_recruiting"
+}
 
 // ============================================================
 // Ratings: SP / SRS / Elo / FPI
-// Stored largely as jsonb payloads, with primary keys on (year, team|conference).
+// Stored largely as jsonb payloads, with primary keys on
+// (year, team|conference).
 // ============================================================
 
 type TeamSP struct {
@@ -963,7 +977,9 @@ type GameTeamStatsTeamStat struct {
 	Stat      string `gorm:"column:stat;not null"`
 }
 
-func (GameTeamStatsTeamStat) TableName() string { return "game_team_stats_team_stats" }
+func (GameTeamStatsTeamStat) TableName() string {
+	return "game_team_stats_team_stats"
+}
 
 // ============================================================
 // Game player stats (very nested)
@@ -987,10 +1003,12 @@ type GamePlayerStatsTeam struct {
 	HomeAway   string `gorm:"column:home_away"`
 	Points     *int32 `gorm:"column:points"`
 
-	Categories []GamePlayerStatCategories `gorm:"foreignKey:TeamRowID;references:ID"`
+	Categories []GamePlayerStatCategories `gorm:"foreignKey:TeamRowID;references:ID"` //nolint:lll
 }
 
-func (GamePlayerStatsTeam) TableName() string { return "game_player_stats_teams" }
+func (GamePlayerStatsTeam) TableName() string {
+	return "game_player_stats_teams"
+}
 
 type GamePlayerStatCategories struct {
 	ID        int64  `gorm:"primaryKey;column:id"`
@@ -1000,7 +1018,9 @@ type GamePlayerStatCategories struct {
 	Types []GamePlayerStatTypes `gorm:"foreignKey:CategoryRowID;references:ID"`
 }
 
-func (GamePlayerStatCategories) TableName() string { return "game_player_stat_categories" }
+func (GamePlayerStatCategories) TableName() string {
+	return "game_player_stat_categories"
+}
 
 type GamePlayerStatTypes struct {
 	ID            int64  `gorm:"primaryKey;column:id"`
@@ -1010,7 +1030,9 @@ type GamePlayerStatTypes struct {
 	Athletes []GamePlayerStatPlayer `gorm:"foreignKey:TypeRowID;references:ID"`
 }
 
-func (GamePlayerStatTypes) TableName() string { return "game_player_stat_types" }
+func (GamePlayerStatTypes) TableName() string {
+	return "game_player_stat_types"
+}
 
 type GamePlayerStatPlayer struct {
 	ID        int64  `gorm:"primaryKey;column:id"`
@@ -1020,7 +1042,9 @@ type GamePlayerStatPlayer struct {
 	Stat      string `gorm:"column:stat;not null"`
 }
 
-func (GamePlayerStatPlayer) TableName() string { return "game_player_stat_players" }
+func (GamePlayerStatPlayer) TableName() string {
+	return "game_player_stat_players"
+}
 
 // ============================================================
 // Live game (/live/plays) nested entities
@@ -1036,31 +1060,33 @@ type LiveGame struct {
 	Distance    *int32 `gorm:"column:distance"`
 	YardsToGoal *int32 `gorm:"column:yards_to_goal"`
 
-	Teams  []LiveGameTeam  `gorm:"foreignKey:LiveGameID;references:ID"`
-	Drives []LiveGameDrive `gorm:"foreignKey:LiveGameID;references:ID"`
+	Teams  []LiveGameTeam  `gorm:"foreignKey:LiveGameID;references:ID"` //nolint:lll
+	Drives []LiveGameDrive `gorm:"foreignKey:LiveGameID;references:ID"` //nolint:lll
 }
 
-func (LiveGame) TableName() string { return "live_games" }
+func (LiveGame) TableName() string {
+	return "live_games"
+}
 
 type LiveGameTeam struct {
 	ID                      int64         `gorm:"primaryKey;column:id"`
-	LiveGameID              int32         `gorm:"column:live_game_id;index;not null"`
+	LiveGameID              int32         `gorm:"column:live_game_id;index;not null"` //nolint:lll
 	TeamID                  int32         `gorm:"column:team_id;index;not null"`
 	Team                    string        `gorm:"column:team;not null"`
 	HomeAway                string        `gorm:"column:home_away"`
 	LineScores              pq.Int64Array `gorm:"column:line_scores;type:int[]"`
 	Points                  int32         `gorm:"column:points;not null"`
 	Drives                  int32         `gorm:"column:drives;not null"`
-	ScoringOpportunities    int32         `gorm:"column:scoring_opportunities;not null"`
-	PointsPerOpportunity    float64       `gorm:"column:points_per_opportunity;not null"`
-	AverageStartYardLine    *float64      `gorm:"column:average_start_yard_line"`
-	Plays                   int32         `gorm:"column:plays;not null"`
-	LineYards               float64       `gorm:"column:line_yards;not null"`
-	LineYardsPerRush        float64       `gorm:"column:line_yards_per_rush;not null"`
-	SecondLevelYards        float64       `gorm:"column:second_level_yards;not null"`
-	SecondLevelYardsPerRush float64       `gorm:"column:second_level_yards_per_rush;not null"`
-	OpenFieldYards          float64       `gorm:"column:open_field_yards;not null"`
-	OpenFieldYardsPerRush   float64       `gorm:"column:open_field_yards_per_rush;not null"`
+	ScoringOpportunities    int32         `gorm:"column:scoring_opportunities;not null"`       //nolint:lll
+	PointsPerOpportunity    float64       `gorm:"column:points_per_opportunity;not null"`      //nolint:lll
+	AverageStartYardLine    *float64      `gorm:"column:average_start_yard_line"`              //nolint:lll
+	Plays                   int32         `gorm:"column:plays;not null"`                       //nolint:lll
+	LineYards               float64       `gorm:"column:line_yards;not null"`                  //nolint:lll
+	LineYardsPerRush        float64       `gorm:"column:line_yards_per_rush;not null"`         //nolint:lll
+	SecondLevelYards        float64       `gorm:"column:second_level_yards;not null"`          //nolint:lll
+	SecondLevelYardsPerRush float64       `gorm:"column:second_level_yards_per_rush;not null"` //nolint:lll
+	OpenFieldYards          float64       `gorm:"column:open_field_yards;not null"`            //nolint:lll
+	OpenFieldYardsPerRush   float64       `gorm:"column:open_field_yards_per_rush;not null"`   //nolint:lll
 	EpaPerPlay              float64       `gorm:"column:epa_per_play;not null"`
 	TotalEpa                float64       `gorm:"column:total_epa;not null"`
 	PassingEpa              float64       `gorm:"column:passing_epa;not null"`
@@ -1068,8 +1094,8 @@ type LiveGameTeam struct {
 	RushingEpa              float64       `gorm:"column:rushing_epa;not null"`
 	EpaPerRush              float64       `gorm:"column:epa_per_rush;not null"`
 	SuccessRate             float64       `gorm:"column:success_rate;not null"`
-	StandardDownSuccessRate float64       `gorm:"column:standard_down_success_rate;not null"`
-	PassingDownSuccessRate  float64       `gorm:"column:passing_down_success_rate;not null"`
+	StandardDownSuccessRate float64       `gorm:"column:standard_down_success_rate;not null"` //nolint:lll
+	PassingDownSuccessRate  float64       `gorm:"column:passing_down_success_rate;not null"`  //nolint:lll
 	Explosiveness           float64       `gorm:"column:explosiveness;not null"`
 	DeserveToWin            *float64      `gorm:"column:deserve_to_win"`
 }
@@ -1125,7 +1151,9 @@ type LiveGamePlay struct {
 	PlayText    string     `gorm:"column:play_text"`
 }
 
-func (LiveGamePlay) TableName() string { return "live_game_plays" }
+func (LiveGamePlay) TableName() string {
+	return "live_game_plays"
+}
 
 // ============================================================
 // PPA predicted points & PPA endpoints
@@ -1138,7 +1166,9 @@ type PredictedPointsValue struct {
 	PredictedPoints float64 `gorm:"column:predicted_points;not null"`
 }
 
-func (PredictedPointsValue) TableName() string { return "predicted_points_values" }
+func (PredictedPointsValue) TableName() string {
+	return "predicted_points_values"
+}
 
 type TeamSeasonPredictedPointsAdded struct {
 	Season     int32          `gorm:"primaryKey;column:season"`
@@ -1148,7 +1178,9 @@ type TeamSeasonPredictedPointsAdded struct {
 	Defense    datatypes.JSON `gorm:"column:defense;type:jsonb"`
 }
 
-func (TeamSeasonPredictedPointsAdded) TableName() string { return "team_season_ppa" }
+func (TeamSeasonPredictedPointsAdded) TableName() string {
+	return "team_season_ppa"
+}
 
 type TeamGamePredictedPointsAdded struct {
 	GameID     int32          `gorm:"primaryKey;column:game_id"`
@@ -1162,7 +1194,9 @@ type TeamGamePredictedPointsAdded struct {
 	Defense    datatypes.JSON `gorm:"column:defense;type:jsonb"`
 }
 
-func (TeamGamePredictedPointsAdded) TableName() string { return "team_game_ppa" }
+func (TeamGamePredictedPointsAdded) TableName() string {
+	return "team_game_ppa"
+}
 
 type PlayerGamePredictedPointsAdded struct {
 	Season     int32          `gorm:"primaryKey;column:season"`
@@ -1176,7 +1210,9 @@ type PlayerGamePredictedPointsAdded struct {
 	AveragePPA datatypes.JSON `gorm:"column:average_ppa;type:jsonb"`
 }
 
-func (PlayerGamePredictedPointsAdded) TableName() string { return "player_game_ppa" }
+func (PlayerGamePredictedPointsAdded) TableName() string {
+	return "player_game_ppa"
+}
 
 type PlayerSeasonPredictedPointsAdded struct {
 	Season     int32          `gorm:"primaryKey;column:season"`
@@ -1189,7 +1225,9 @@ type PlayerSeasonPredictedPointsAdded struct {
 	TotalPPA   datatypes.JSON `gorm:"column:total_ppa;type:jsonb"`
 }
 
-func (PlayerSeasonPredictedPointsAdded) TableName() string { return "player_season_ppa" }
+func (PlayerSeasonPredictedPointsAdded) TableName() string {
+	return "player_season_ppa"
+}
 
 // ============================================================
 // Win probability
@@ -1227,7 +1265,9 @@ type PregameWinProbability struct {
 	HomeWinProbability float64 `gorm:"column:home_win_probability"`
 }
 
-func (PregameWinProbability) TableName() string { return "pregame_win_probability" }
+func (PregameWinProbability) TableName() string {
+	return "pregame_win_probability"
+}
 
 type FieldGoalEP struct {
 	YardsToGoal    int32   `gorm:"primaryKey;column:yards_to_goal"`
@@ -1280,13 +1320,15 @@ type DraftPickHometownInfo struct {
 	City       string `gorm:"column:city"`
 }
 
-func (DraftPickHometownInfo) TableName() string { return "draft_pick_hometown_info" }
+func (DraftPickHometownInfo) TableName() string {
+	return "draft_pick_hometown_info"
+}
 
 type DraftPick struct {
 	ID                      int64    `gorm:"primaryKey;column:id"`
 	CollegeAthleteID        *int32   `gorm:"column:college_athlete_id"`
 	NflAthleteID            *int32   `gorm:"column:nfl_athlete_id"`
-	CollegeID               int32    `gorm:"column:college_id;index;not null"`
+	CollegeID               int32    `gorm:"column:college_id;index;not null"` //nolint:lll
 	CollegeTeam             string   `gorm:"column:college_team"`
 	CollegeConference       string   `gorm:"column:college_conference"`
 	NflTeamID               int32    `gorm:"column:nfl_team_id;index;not null"`
@@ -1303,8 +1345,8 @@ type DraftPick struct {
 	PreDraftPositionRanking *int32   `gorm:"column:pre_draft_position_ranking"`
 	PreDraftGrade           *int32   `gorm:"column:pre_draft_grade"`
 
-	HometownInfoID *int64                 `gorm:"column:hometown_info_id;index"`
-	HometownInfo   *DraftPickHometownInfo `gorm:"foreignKey:HometownInfoID;references:ID"`
+	HometownInfoID *int64                 `gorm:"column:hometown_info_id;index"`           //nolint:lll
+	HometownInfo   *DraftPickHometownInfo `gorm:"foreignKey:HometownInfoID;references:ID"` //nolint:lll
 }
 
 func (DraftPick) TableName() string { return "draft_picks" }
@@ -1360,21 +1402,21 @@ type AdjustedTeamMetrics struct {
 	EpaAllowedPassing float64 `gorm:"column:epa_allowed_passing;not null"`
 	EpaAllowedTotal   float64 `gorm:"column:epa_allowed_total;not null"`
 
-	SuccessRatePassingDowns         float64 `gorm:"column:success_rate_passing_downs;not null"`
-	SuccessRateStandardDowns        float64 `gorm:"column:success_rate_standard_downs;not null"`
-	SuccessRateTotal                float64 `gorm:"column:success_rate_total;not null"`
-	SuccessRateAllowedPassingDowns  float64 `gorm:"column:success_rate_allowed_passing_downs;not null"`
-	SuccessRateAllowedStandardDowns float64 `gorm:"column:success_rate_allowed_standard_downs;not null"`
-	SuccessRateAllowedTotal         float64 `gorm:"column:success_rate_allowed_total;not null"`
+	SuccessRatePassingDowns         float64 `gorm:"column:success_rate_passing_downs;not null"`          //nolint:lll
+	SuccessRateStandardDowns        float64 `gorm:"column:success_rate_standard_downs;not null"`         //nolint:lll
+	SuccessRateTotal                float64 `gorm:"column:success_rate_total;not null"`                  //nolint:lll
+	SuccessRateAllowedPassingDowns  float64 `gorm:"column:success_rate_allowed_passing_downs;not null"`  //nolint:lll
+	SuccessRateAllowedStandardDowns float64 `gorm:"column:success_rate_allowed_standard_downs;not null"` //nolint:lll
+	SuccessRateAllowedTotal         float64 `gorm:"column:success_rate_allowed_total;not null"`          //nolint:lll
 
-	RushingHighlightYards          float64 `gorm:"column:rushing_highlight_yards;not null"`
-	RushingOpenFieldYards          float64 `gorm:"column:rushing_open_field_yards;not null"`
-	RushingSecondLevelYards        float64 `gorm:"column:rushing_second_level_yards;not null"`
-	RushingLineYards               float64 `gorm:"column:rushing_line_yards;not null"`
-	RushingAllowedHighlightYards   float64 `gorm:"column:rushing_allowed_highlight_yards;not null"`
-	RushingAllowedOpenFieldYards   float64 `gorm:"column:rushing_allowed_open_field_yards;not null"`
-	RushingAllowedSecondLevelYards float64 `gorm:"column:rushing_allowed_second_level_yards;not null"`
-	RushingAllowedLineYards        float64 `gorm:"column:rushing_allowed_line_yards;not null"`
+	RushingHighlightYards          float64 `gorm:"column:rushing_highlight_yards;not null"`            //nolint:lll
+	RushingOpenFieldYards          float64 `gorm:"column:rushing_open_field_yards;not null"`           //nolint:lll
+	RushingSecondLevelYards        float64 `gorm:"column:rushing_second_level_yards;not null"`         //nolint:lll
+	RushingLineYards               float64 `gorm:"column:rushing_line_yards;not null"`                 //nolint:lll
+	RushingAllowedHighlightYards   float64 `gorm:"column:rushing_allowed_highlight_yards;not null"`    //nolint:lll
+	RushingAllowedOpenFieldYards   float64 `gorm:"column:rushing_allowed_open_field_yards;not null"`   //nolint:lll
+	RushingAllowedSecondLevelYards float64 `gorm:"column:rushing_allowed_second_level_yards;not null"` //nolint:lll
+	RushingAllowedLineYards        float64 `gorm:"column:rushing_allowed_line_yards;not null"`         //nolint:lll
 
 	Explosiveness        float64 `gorm:"column:explosiveness;not null"`
 	ExplosivenessAllowed float64 `gorm:"column:explosiveness_allowed;not null"`
