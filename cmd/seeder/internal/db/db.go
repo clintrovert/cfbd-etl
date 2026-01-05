@@ -41,7 +41,7 @@ type Config struct {
 	MaxConnectionLifetimeMin int
 }
 
-// Database todo:describe
+// Database creates a new database connection.
 type Database struct {
 	*gorm.DB
 }
