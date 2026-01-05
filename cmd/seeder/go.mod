@@ -6,6 +6,7 @@ require (
 	github.com/clintrovert/cfbd-go v0.0.26
 	github.com/lib/pq v1.10.9
 	golang.org/x/sync v0.19.0
+	golang.org/x/time v0.14.0
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/postgres v1.5.7
 	gorm.io/gorm v1.30.0

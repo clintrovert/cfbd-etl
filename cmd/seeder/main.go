@@ -5,10 +5,11 @@ import (
    "log/slog"
    "os"
 
-   "github.com/clintrovert/cfbd-etl/seeder/internal"
    "github.com/clintrovert/cfbd-etl/seeder/internal/db"
+   "github.com/clintrovert/cfbd-etl/seeder/internal/seed"
    "github.com/clintrovert/cfbd-go/cfbd"
    "golang.org/x/sync/errgroup"
+   "golang.org/x/time/rate"
 )
 
 func main() {
@@ -44,7 +45,10 @@ func main() {
       os.Exit(1)
    }
 
-   seeder, err := internal.NewSeeder(database, api)
+   throttle := rate.NewLimiter(rate.Limit(10), 20)
+
+   // Rate limiter: 10 requests per second with burst of 20
+   seeder, err := seed.NewSeeder(database, api, throttle)
    if err != nil {
       slog.Error("failed to create seeder", "err", err)
       os.Exit(1)
@@ -113,9 +117,9 @@ func main() {
    phase4, phase4Ctx := errgroup.WithContext(ctx)
    seeder.SetExecutionContext(phase4Ctx)
 
-   phase4.Go(seeder.SeedDrives) // 20 requests
-   phase4.Go(seeder.SeedPlays)  // 400 requests
-   // phase4.Go(seeder.SeedPlayStats)       // 400 requests
+   phase4.Go(seeder.SeedDrives)    // 20 requests
+   phase4.Go(seeder.SeedPlays)     // 400 requests
+   phase4.Go(seeder.SeedPlayStats) // 400 requests
    // phase4.Go(seeder.SeedGameTeamStats)   // 400 requests
    // phase4.Go(seeder.SeedGamePlayerStats) // 400 requests
    //

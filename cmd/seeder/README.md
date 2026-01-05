@@ -240,3 +240,5 @@ The docker-compose setup includes:
 - **postgres**: PostgreSQL 16 database
 - **seeder**: The CFBD data seeder service
 - **pgadmin**: Web-based PostgreSQL administration tool
+
+
