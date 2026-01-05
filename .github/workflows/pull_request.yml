@@ -1,0 +1,44 @@
+name: Tests and Linting
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/seeder/**'
+      - '.golangci.yml'
+      - 'Makefile'
+    branches:
+      - main
+      - master
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.4'
+          cache-dependency-path: cmd/seeder/go.sum
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Download dependencies
+        working-directory: cmd/seeder
+        run: go mod download
+
+      - name: Build seeder
+        working-directory: cmd/seeder
+        run: go build -v ./...
+
+      - name: Run tests
+        working-directory: cmd/seeder
+        run: go test -v ./...
+
+      - name: Run linter
+        run: make lint
+
