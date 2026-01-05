@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/clintrovert/cfbd-etl/seeder/internal/utils"
 	"github.com/clintrovert/cfbd-go/cfbd"
-	"github.com/lib/pq"
 	"gorm.io/datatypes"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -52,7 +52,9 @@ func NewDatabase(conf Config) (*Database, error) {
 	}
 
 	gdb, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		Logger:                                   logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(
+			logger.Info,
+		),
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
@@ -760,7 +762,12 @@ func (db *Database) InsertFieldGoalEP(
 
 // InsertTeams inserts Team rows into cfbd.teams.
 // Assumes Venues table exists and is populated.
-func (db *Database) InsertTeams(ctx context.Context, teams []*cfbd.Team) error {
+// InsertTeams inserts Team rows into cfbd.teams.
+// Assumes Venues table exists and is populated.
+func (db *Database) InsertTeams(
+	ctx context.Context,
+	teams []*cfbd.Team,
+) error {
 	if len(teams) == 0 {
 		return nil
 	}
@@ -792,13 +799,13 @@ func (db *Database) InsertTeams(ctx context.Context, teams []*cfbd.Team) error {
 			School:         strings.TrimSpace(t.GetSchool()),
 			Mascot:         strings.TrimSpace(t.GetMascot()),
 			Abbreviation:   strings.TrimSpace(t.GetAbbreviation()),
-			AlternateNames: toStringArray(t.GetAlternateNames()),
+			AlternateNames: utils.ToStringArray(t.GetAlternateNames()),
 			Conference:     strings.TrimSpace(t.GetConference()),
 			Division:       strings.TrimSpace(t.GetDivision()),
 			Classification: strings.TrimSpace(t.GetClassification()),
 			Color:          strings.TrimSpace(t.GetColor()),
 			AlternateColor: strings.TrimSpace(t.GetAlternateColor()),
-			Logos:          toStringArray(t.GetLogos()),
+			Logos:          utils.ToStringArray(t.GetLogos()),
 			Twitter:        strings.TrimSpace(t.GetTwitter()),
 			VenueID:        venueID,
 		}
@@ -926,7 +933,10 @@ func (db *Database) InsertCalendarWeeks(
 	return nil
 }
 
-func (db *Database) InsertGames(ctx context.Context, games []*cfbd.Game) error {
+func (db *Database) InsertGames(
+	ctx context.Context,
+	games []*cfbd.Game,
+) error {
 	if len(games) == 0 {
 		return nil
 	}
@@ -1039,7 +1049,7 @@ func (db *Database) InsertGames(ctx context.Context, games []*cfbd.Game) error {
 			HomeConference:         strings.TrimSpace(g.GetHomeConference()),
 			HomeClassification:     strings.TrimSpace(g.GetHomeClassification()),
 			HomePoints:             homePoints,
-			HomeLineScores:         int32SliceToInt64Array(g.GetHomeLineScores()),
+			HomeLineScores:         utils.Int32SliceToInt64Array(g.GetHomeLineScores()),
 			HomePostWinProbability: homePostWinProb,
 			HomePregameElo:         homePregameElo,
 			HomePostgameElo:        homePostgameElo,
@@ -1048,7 +1058,7 @@ func (db *Database) InsertGames(ctx context.Context, games []*cfbd.Game) error {
 			AwayConference:         strings.TrimSpace(g.GetAwayConference()),
 			AwayClassification:     strings.TrimSpace(g.GetAwayClassification()),
 			AwayPoints:             awayPoints,
-			AwayLineScores:         int32SliceToInt64Array(g.GetAwayLineScores()),
+			AwayLineScores:         utils.Int32SliceToInt64Array(g.GetAwayLineScores()),
 			AwayPostWinProbability: awayPostWinProb,
 			AwayPregameElo:         awayPregameElo,
 			AwayPostgameElo:        awayPostgameElo,
@@ -1108,7 +1118,10 @@ func (db *Database) InsertGames(ctx context.Context, games []*cfbd.Game) error {
 	return nil
 }
 
-func (db *Database) InsertPlays(ctx context.Context, plays []*cfbd.Play) error {
+func (db *Database) InsertPlays(
+	ctx context.Context,
+	plays []*cfbd.Play,
+) error {
 	if len(plays) == 0 {
 		return nil
 	}
@@ -1247,7 +1260,10 @@ func (db *Database) InsertPlays(ctx context.Context, plays []*cfbd.Play) error {
 	return nil
 }
 
-func (db *Database) InsertDrives(ctx context.Context, drives []*cfbd.Drive) error {
+func (db *Database) InsertDrives(
+	ctx context.Context,
+	drives []*cfbd.Drive,
+) error {
 	if len(drives) == 0 {
 		return nil
 	}
@@ -1394,7 +1410,10 @@ func (db *Database) InsertDrives(ctx context.Context, drives []*cfbd.Drive) erro
 	return nil
 }
 
-func (db *Database) InsertPlayStats(ctx context.Context, playStats []*cfbd.PlayStat) error {
+func (db *Database) InsertPlayStats(
+	ctx context.Context,
+	playStats []*cfbd.PlayStat,
+) error {
 	if len(playStats) == 0 {
 		return nil
 	}
@@ -1463,35 +1482,11 @@ func (db *Database) InsertPlayStats(ctx context.Context, playStats []*cfbd.PlayS
 	return nil
 }
 
-func int32SliceToInt64Array(xs []int32) pq.Int64Array {
-	if len(xs) == 0 {
-		return nil
-	}
-	out := make(pq.Int64Array, 0, len(xs))
-	for _, v := range xs {
-		out = append(out, int64(v))
-	}
-	return out
-}
-
-func toStringArray(in []string) pq.StringArray {
-	if len(in) == 0 {
-		// store empty array rather than NULL
-		return pq.StringArray{}
-	}
-	out := make([]string, 0, len(in))
-	for _, s := range in {
-		v := strings.TrimSpace(s)
-		if v == "" {
-			continue
-		}
-		out = append(out, v)
-	}
-	return pq.StringArray(out)
-}
-
 // InsertGameWeather inserts game weather data.
-func (db *Database) InsertGameWeather(ctx context.Context, weather []*cfbd.GameWeather) error {
+func (db *Database) InsertGameWeather(
+	ctx context.Context,
+	weather []*cfbd.GameWeather,
+) error {
 	if len(weather) == 0 {
 		return nil
 	}
@@ -1540,7 +1535,10 @@ func (db *Database) InsertGameWeather(ctx context.Context, weather []*cfbd.GameW
 }
 
 // InsertGameMedia inserts game media data.
-func (db *Database) InsertGameMedia(ctx context.Context, media []*cfbd.GameMedia) error {
+func (db *Database) InsertGameMedia(
+	ctx context.Context,
+	media []*cfbd.GameMedia,
+) error {
 	if len(media) == 0 {
 		return nil
 	}
@@ -1557,12 +1555,13 @@ func (db *Database) InsertGameMedia(ctx context.Context, media []*cfbd.GameMedia
 		}
 
 		models = append(models, GameMedia{
-			ID:             m.Id, // protobuf field
-			Season:         m.Season,
-			Week:           m.Week,
-			SeasonType:     m.SeasonType,
-			StartTime:      startTime,
-			IsStartTimeTBD: m.IsStartTime_TBD, // Check exact name in doc was IsStartTime_TBD?
+			ID:         m.Id, // protobuf field
+			Season:     m.Season,
+			Week:       m.Week,
+			SeasonType: m.SeasonType,
+			StartTime:  startTime,
+			// Check exact name in doc: IsStartTime_TBD?
+			IsStartTimeTBD: m.IsStartTime_TBD,
 			HomeTeam:       m.HomeTeam,
 			HomeConference: m.HomeConference,
 			AwayTeam:       m.AwayTeam,
@@ -1578,7 +1577,10 @@ func (db *Database) InsertGameMedia(ctx context.Context, media []*cfbd.GameMedia
 }
 
 // InsertBettingLines inserts game betting lines.
-func (db *Database) InsertBettingLines(ctx context.Context, lines []*cfbd.BettingGame) error {
+func (db *Database) InsertBettingLines(
+	ctx context.Context,
+	lines []*cfbd.BettingGame,
+) error {
 	if len(lines) == 0 {
 		return nil
 	}
@@ -1638,7 +1640,10 @@ func (db *Database) InsertBettingLines(ctx context.Context, lines []*cfbd.Bettin
 }
 
 // InsertTeamRecords inserts team records.
-func (db *Database) InsertTeamRecords(ctx context.Context, records []*cfbd.TeamRecords) error {
+func (db *Database) InsertTeamRecords(
+	ctx context.Context,
+	records []*cfbd.TeamRecords,
+) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -1715,7 +1720,10 @@ func (db *Database) InsertTeamRecords(ctx context.Context, records []*cfbd.TeamR
 }
 
 // InsertTeamTalent inserts team talent composite rankings.
-func (db *Database) InsertTeamTalent(ctx context.Context, talent []*cfbd.TeamTalent) error {
+func (db *Database) InsertTeamTalent(
+	ctx context.Context,
+	talent []*cfbd.TeamTalent,
+) error {
 	if len(talent) == 0 {
 		return nil
 	}
@@ -1738,7 +1746,10 @@ func (db *Database) InsertTeamTalent(ctx context.Context, talent []*cfbd.TeamTal
 }
 
 // InsertTeamATS inserts team ATS records.
-func (db *Database) InsertTeamATS(ctx context.Context, ats []*cfbd.TeamATS) error {
+func (db *Database) InsertTeamATS(
+	ctx context.Context,
+	ats []*cfbd.TeamATS,
+) error {
 	if len(ats) == 0 {
 		return nil
 	}
@@ -1767,7 +1778,10 @@ func (db *Database) InsertTeamATS(ctx context.Context, ats []*cfbd.TeamATS) erro
 }
 
 // InsertTeamSP inserts team SP+ ratings.
-func (db *Database) InsertTeamSP(ctx context.Context, ratings []*cfbd.TeamSP) error {
+func (db *Database) InsertTeamSP(
+	ctx context.Context,
+	ratings []*cfbd.TeamSP,
+) error {
 	if len(ratings) == 0 {
 		return nil
 	}
@@ -1798,7 +1812,10 @@ func (db *Database) InsertTeamSP(ctx context.Context, ratings []*cfbd.TeamSP) er
 }
 
 // InsertConferenceSP inserts conference SP+ ratings.
-func (db *Database) InsertConferenceSP(ctx context.Context, ratings []*cfbd.ConferenceSP) error {
+func (db *Database) InsertConferenceSP(
+	ctx context.Context,
+	ratings []*cfbd.ConferenceSP,
+) error {
 	if len(ratings) == 0 {
 		return nil
 	}
@@ -1828,7 +1845,10 @@ func (db *Database) InsertConferenceSP(ctx context.Context, ratings []*cfbd.Conf
 }
 
 // InsertTeamSRS inserts team SRS ratings.
-func (db *Database) InsertTeamSRS(ctx context.Context, ratings []*cfbd.TeamSRS) error {
+func (db *Database) InsertTeamSRS(
+	ctx context.Context,
+	ratings []*cfbd.TeamSRS,
+) error {
 	if len(ratings) == 0 {
 		return nil
 	}
@@ -1854,7 +1874,10 @@ func (db *Database) InsertTeamSRS(ctx context.Context, ratings []*cfbd.TeamSRS) 
 }
 
 // InsertTeamElo inserts team Elo ratings.
-func (db *Database) InsertTeamElo(ctx context.Context, ratings []*cfbd.TeamElo) error {
+func (db *Database) InsertTeamElo(
+	ctx context.Context,
+	ratings []*cfbd.TeamElo,
+) error {
 	if len(ratings) == 0 {
 		return nil
 	}
@@ -1878,7 +1901,10 @@ func (db *Database) InsertTeamElo(ctx context.Context, ratings []*cfbd.TeamElo) 
 }
 
 // InsertTeamFPI inserts team FPI ratings.
-func (db *Database) InsertTeamFPI(ctx context.Context, ratings []*cfbd.TeamFPI) error {
+func (db *Database) InsertTeamFPI(
+	ctx context.Context,
+	ratings []*cfbd.TeamFPI,
+) error {
 	if len(ratings) == 0 {
 		return nil
 	}
@@ -1909,7 +1935,10 @@ func (db *Database) InsertTeamFPI(ctx context.Context, ratings []*cfbd.TeamFPI) 
 }
 
 // InsertAdjustedTeamMetrics inserts adjusted team metrics (WEPA/EPA).
-func (db *Database) InsertAdjustedTeamMetrics(ctx context.Context, metrics []*cfbd.AdjustedTeamMetrics) error {
+func (db *Database) InsertAdjustedTeamMetrics(
+	ctx context.Context,
+	metrics []*cfbd.AdjustedTeamMetrics,
+) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -2000,7 +2029,10 @@ func (db *Database) InsertAdjustedTeamMetrics(ctx context.Context, metrics []*cf
 }
 
 // InsertPlayerWeightedEPA inserts player weighted EPA.
-func (db *Database) InsertPlayerWeightedEPA(ctx context.Context, metrics []*cfbd.PlayerWeightedEPA) error {
+func (db *Database) InsertPlayerWeightedEPA(
+	ctx context.Context,
+	metrics []*cfbd.PlayerWeightedEPA,
+) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -2028,7 +2060,10 @@ func (db *Database) InsertPlayerWeightedEPA(ctx context.Context, metrics []*cfbd
 }
 
 // InsertKickerPAAR inserts kicker PAAR.
-func (db *Database) InsertKickerPAAR(ctx context.Context, kickers []*cfbd.KickerPAAR) error {
+func (db *Database) InsertKickerPAAR(
+	ctx context.Context,
+	kickers []*cfbd.KickerPAAR,
+) error {
 	if len(kickers) == 0 {
 		return nil
 	}
@@ -2055,7 +2090,10 @@ func (db *Database) InsertKickerPAAR(ctx context.Context, kickers []*cfbd.Kicker
 }
 
 // InsertReturningProduction inserts returning production.
-func (db *Database) InsertReturningProduction(ctx context.Context, production []*cfbd.ReturningProduction) error {
+func (db *Database) InsertReturningProduction(
+	ctx context.Context,
+	production []*cfbd.ReturningProduction,
+) error {
 	if len(production) == 0 {
 		return nil
 	}
@@ -2090,7 +2128,10 @@ func (db *Database) InsertReturningProduction(ctx context.Context, production []
 }
 
 // InsertPlayerTransfers inserts player transfers.
-func (db *Database) InsertPlayerTransfers(ctx context.Context, transfers []*cfbd.PlayerTransfer) error {
+func (db *Database) InsertPlayerTransfers(
+	ctx context.Context,
+	transfers []*cfbd.PlayerTransfer,
+) error {
 	if len(transfers) == 0 {
 		return nil
 	}
@@ -2127,7 +2168,10 @@ func (db *Database) InsertPlayerTransfers(ctx context.Context, transfers []*cfbd
 }
 
 // InsertPlayerStats inserts season player stats.
-func (db *Database) InsertPlayerStats(ctx context.Context, stats []*cfbd.PlayerStat) error {
+func (db *Database) InsertPlayerStats(
+	ctx context.Context,
+	stats []*cfbd.PlayerStat,
+) error {
 	if len(stats) == 0 {
 		return nil
 	}
@@ -2156,7 +2200,10 @@ func (db *Database) InsertPlayerStats(ctx context.Context, stats []*cfbd.PlayerS
 }
 
 // InsertTeamStats inserts season team stats.
-func (db *Database) InsertTeamStats(ctx context.Context, stats []*cfbd.TeamStat) error {
+func (db *Database) InsertTeamStats(
+	ctx context.Context,
+	stats []*cfbd.TeamStat,
+) error {
 	if len(stats) == 0 {
 		return nil
 	}
@@ -2188,7 +2235,10 @@ func (db *Database) InsertTeamStats(ctx context.Context, stats []*cfbd.TeamStat)
 }
 
 // InsertRankings inserts poll rankings.
-func (db *Database) InsertRankings(ctx context.Context, weeks []*cfbd.PollWeek) error {
+func (db *Database) InsertRankings(
+	ctx context.Context,
+	weeks []*cfbd.PollWeek,
+) error {
 	if len(weeks) == 0 {
 		return nil
 	}
@@ -2233,13 +2283,17 @@ func (db *Database) InsertRankings(ctx context.Context, weeks []*cfbd.PollWeek) 
 		})
 	}
 
+	// Reduced batch size for complex associations
 	return db.WithContext(ctx).Clauses(clause.OnConflict{
 		UpdateAll: true,
-	}).CreateInBatches(models, 20).Error // Reduced batch size for complex associations
+	}).CreateInBatches(models, 20).Error
 }
 
 // InsertRecruits inserts recruiting data.
-func (db *Database) InsertRecruits(ctx context.Context, recruits []*cfbd.Recruit) error {
+func (db *Database) InsertRecruits(
+	ctx context.Context,
+	recruits []*cfbd.Recruit,
+) error {
 	if len(recruits) == 0 {
 		return nil
 	}
@@ -2286,7 +2340,10 @@ func (db *Database) InsertRecruits(ctx context.Context, recruits []*cfbd.Recruit
 }
 
 // InsertTeamRecruitingRankings inserts team recruiting rankings.
-func (db *Database) InsertTeamRecruitingRankings(ctx context.Context, rankings []*cfbd.TeamRecruitingRanking) error {
+func (db *Database) InsertTeamRecruitingRankings(
+	ctx context.Context,
+	rankings []*cfbd.TeamRecruitingRanking,
+) error {
 	if len(rankings) == 0 {
 		return nil
 	}
@@ -2310,7 +2367,10 @@ func (db *Database) InsertTeamRecruitingRankings(ctx context.Context, rankings [
 }
 
 // InsertDraftPicks inserts NFL draft picks.
-func (db *Database) InsertDraftPicks(ctx context.Context, picks []*cfbd.DraftPick) error {
+func (db *Database) InsertDraftPicks(
+	ctx context.Context,
+	picks []*cfbd.DraftPick,
+) error {
 	if len(picks) == 0 {
 		return nil
 	}
@@ -2412,7 +2472,10 @@ func (db *Database) InsertGameTeamStats(ctx context.Context, stats []*cfbd.GameT
 }
 
 // InsertGamePlayerStats inserts game player stats.
-func (db *Database) InsertGamePlayerStats(ctx context.Context, stats []*cfbd.GamePlayerStats) error {
+func (db *Database) InsertGamePlayerStats(
+	ctx context.Context,
+	stats []*cfbd.GamePlayerStats,
+) error {
 	if len(stats) == 0 {
 		return nil
 	}
@@ -2495,7 +2558,10 @@ func (db *Database) GetGameIDs(ctx context.Context, year int) ([]int32, error) {
 }
 
 // InsertPlayWinProbability inserts play win probabilities.
-func (db *Database) InsertPlayWinProbability(ctx context.Context, plays []*cfbd.PlayWinProbability) error {
+func (db *Database) InsertPlayWinProbability(
+	ctx context.Context,
+	plays []*cfbd.PlayWinProbability,
+) error {
 	if len(plays) == 0 {
 		return nil
 	}
@@ -2531,7 +2597,10 @@ func (db *Database) InsertPlayWinProbability(ctx context.Context, plays []*cfbd.
 }
 
 // InsertAdvancedBoxScores inserts advanced box scores.
-func (db *Database) InsertAdvancedBoxScores(ctx context.Context, scores map[int32]*cfbd.AdvancedBoxScore) error {
+func (db *Database) InsertAdvancedBoxScores(
+	ctx context.Context,
+	scores map[int32]*cfbd.AdvancedBoxScore,
+) error {
 	if len(scores) == 0 {
 		return nil
 	}
@@ -2544,7 +2613,11 @@ func (db *Database) InsertAdvancedBoxScores(ctx context.Context, scores map[int3
 
 		payload, err := json.Marshal(val)
 		if err != nil {
-			slog.Error("failed to marshal advanced box score", "err", err, "game_id", gameID)
+			slog.Error(
+				"failed to marshal advanced box score",
+				"err", err,
+				"game_id", gameID,
+			)
 			continue
 		}
 
