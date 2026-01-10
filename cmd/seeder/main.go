@@ -119,18 +119,18 @@ func main() {
 	phase4, phase4Ctx := errgroup.WithContext(ctx)
 	seeder.SetExecutionContext(phase4Ctx)
 
-	phase4.Go(seeder.SeedDrives)    // 20 requests
-	phase4.Go(seeder.SeedPlays)     // 400 requests
-	phase4.Go(seeder.SeedPlayStats) // 400 requests
-	// phase4.Go(seeder.SeedGameTeamStats)   // 400 requests
-	// phase4.Go(seeder.SeedGamePlayerStats) // 400 requests
-	//
-	// // TODO: Introduce rate limiter to mitigate request bursts
-	// phase4.Go(seeder.SeedAdvancedBoxScore) // ~41,000 requests (as of 2025)
-	// phase4.Go(seeder.SeedGameWeather)      // ~41,000 requests (as of 2025)
-	// phase4.Go(seeder.SeedGameMedia)        // ~41,000 requests (as of 2025)
-	// phase4.Go(seeder.SeedBettingLines)     // ~41,000 requests (as of 2025)
-	// phase4.Go(seeder.SeedWinProbability)   // ~41,000 requests (as of 2025)
+	phase4.Go(seeder.SeedDrives)          // 20 requests
+	phase4.Go(seeder.SeedPlays)           // 400 requests
+	phase4.Go(seeder.SeedPlayStats)       // 400 requests
+	phase4.Go(seeder.SeedGameTeamStats)   // 400 requests
+	phase4.Go(seeder.SeedGamePlayerStats) // 400 requests
+
+	// TODO: Introduce rate limiter to mitigate request bursts
+	phase4.Go(seeder.SeedAdvancedBoxScore) // ~41,000 requests (as of 2025)
+	phase4.Go(seeder.SeedGameWeather)      // ~41,000 requests (as of 2025)
+	phase4.Go(seeder.SeedGameMedia)        // ~41,000 requests (as of 2025)
+	phase4.Go(seeder.SeedBettingLines)     // ~41,000 requests (as of 2025)
+	phase4.Go(seeder.SeedWinProbability)   // ~41,000 requests (as of 2025)
 
 	if phase4Err := phase4.Wait(); phase4Err != nil {
 		slog.Error("phase 4 seeding tables failed", "err", phase4Err)
@@ -139,50 +139,50 @@ func main() {
 
 	slog.Info("Phase 4 Complete.")
 
-	// // ============================== Phase 5 ===============================
-	// slog.Info("Starting Phase 5...")
-	// phase5, phase5Ctx := errgroup.WithContext(ctx)
-	// seeder.SetExecutionContext(phase5Ctx)
-	//
-	// phase5.Go(seeder.SeedTeamRecords)
-	// phase5.Go(seeder.SeedTeamTalentComposite)
-	// phase5.Go(seeder.SeedTeamATS)
-	// phase5.Go(seeder.SeedTeamSPPlus)
-	// phase5.Go(seeder.SeedConferenceSPPlus)
-	// phase5.Go(seeder.SeedTeamSRSRankings)
-	// phase5.Go(seeder.SeedTeamEloRankings)
-	// phase5.Go(seeder.SeedTeamFPIRankings)
-	// phase5.Go(seeder.SeedWepaTeamSeason)
-	// phase5.Go(seeder.SeedWepaPassing)
-	// phase5.Go(seeder.SeedWepaRushing)
-	// phase5.Go(seeder.SeedWepaKicking)
-	// phase5.Go(seeder.SeedReturningProduction)
-	// phase5.Go(seeder.SeedPortalPlayers)
-	// phase5.Go(seeder.SeedSeasonPlayerStats)
-	// phase5.Go(seeder.SeedSeasonTeamStats)
-	// phase5.Go(seeder.SeedRankings)
-	//
-	// if phase5Err := phase5.Wait(); phase5Err != nil {
-	//    slog.Error("phase 5 seeding tables failed", "err", phase5Err)
-	//    os.Exit(1)
-	// }
-	//
-	// slog.Info("Phase 5 Complete.")
-	//
-	// // =============================== Phase 6 ===============================
-	// slog.Info("Starting Phase 6...")
-	// phase6, phase6Ctx := errgroup.WithContext(ctx)
-	// seeder.SetExecutionContext(phase6Ctx)
-	//
-	// phase6.Go(seeder.SeedRecruits)
-	// phase6.Go(seeder.SeedRecruitingRankings)
-	// phase6.Go(seeder.SeedDraftPicks)
-	//
-	// if phase6Err := phase6.Wait(); phase6Err != nil {
-	//    slog.Error("phase 6 seeding tables failed", "err", phase6Err)
-	//    os.Exit(1)
-	// }
-	//
-	// slog.Info("Phase 6 Complete.")
+	// ============================== Phase 5 ===============================
+	slog.Info("Starting Phase 5...")
+	phase5, phase5Ctx := errgroup.WithContext(ctx)
+	seeder.SetExecutionContext(phase5Ctx)
+
+	phase5.Go(seeder.SeedTeamRecords)
+	phase5.Go(seeder.SeedTeamTalentComposite)
+	phase5.Go(seeder.SeedTeamATS)
+	phase5.Go(seeder.SeedTeamSPPlus)
+	phase5.Go(seeder.SeedConferenceSPPlus)
+	phase5.Go(seeder.SeedTeamSRSRankings)
+	phase5.Go(seeder.SeedTeamEloRankings)
+	phase5.Go(seeder.SeedTeamFPIRankings)
+	phase5.Go(seeder.SeedWepaTeamSeason)
+	phase5.Go(seeder.SeedWepaPassing)
+	phase5.Go(seeder.SeedWepaRushing)
+	phase5.Go(seeder.SeedWepaKicking)
+	phase5.Go(seeder.SeedReturningProduction)
+	phase5.Go(seeder.SeedPortalPlayers)
+	phase5.Go(seeder.SeedSeasonPlayerStats)
+	phase5.Go(seeder.SeedSeasonTeamStats)
+	phase5.Go(seeder.SeedRankings)
+
+	if phase5Err := phase5.Wait(); phase5Err != nil {
+		slog.Error("phase 5 seeding tables failed", "err", phase5Err)
+		os.Exit(1)
+	}
+
+	slog.Info("Phase 5 Complete.")
+
+	// =============================== Phase 6 ===============================
+	slog.Info("Starting Phase 6...")
+	phase6, phase6Ctx := errgroup.WithContext(ctx)
+	seeder.SetExecutionContext(phase6Ctx)
+
+	phase6.Go(seeder.SeedRecruits)
+	phase6.Go(seeder.SeedRecruitingRankings)
+	phase6.Go(seeder.SeedDraftPicks)
+
+	if phase6Err := phase6.Wait(); phase6Err != nil {
+		slog.Error("phase 6 seeding tables failed", "err", phase6Err)
+		os.Exit(1)
+	}
+
+	slog.Info("Phase 6 Complete.")
 	slog.Info("Seeding process complete.")
 }
